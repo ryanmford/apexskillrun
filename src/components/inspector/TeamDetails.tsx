@@ -1,0 +1,299 @@
+import React, { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Globe, Instagram, Youtube } from "lucide-react";
+import { cn, formatLocation, getCombinedFlags } from "../../lib/asr-utils";
+import { ASRStatCard } from "../common/ASRStatCard";
+import { BioStat, BioRow } from "./BioComponents";
+import { FallbackAvatar } from "../common/FallbackAvatar";
+import {
+  ProfileHeader,
+  InspectorTabContainer,
+  SectionTitle,
+} from "./InspectorComponents";
+import { ASRRankList } from "../list/ASRRankList";
+import { ASRPromotionBanner, PromoType } from "../common/ASRPromotionBanner";
+
+import { ASRNeonToggle } from "../common/ASRNeonToggle";
+import { ModalScrollContext } from "../common/ASRBaseModal";
+import { TokenChip } from "./VaultComponents";
+
+import { TeamProfile, ASRDataContext } from "../../types";
+import { useTeamDetailsData } from "../../hooks/useInspectorFormatting";
+
+interface TeamDetailsProps {
+  team: TeamProfile & Record<string, unknown>;
+  dataContext: ASRDataContext;
+  onEntityClick: (type: string, data: Record<string, unknown>) => void;
+  theme: "light" | "dark";
+  initialMode?: "all-time";
+}
+
+export const TeamDetails = React.memo(
+  ({
+    team,
+    dataContext,
+    onEntityClick,
+    theme,
+    initialMode,
+  }: TeamDetailsProps) => {
+    const [searchParams] = useSearchParams();
+
+    const urlTab = searchParams.get("tab");
+    const validTabs = ["players", "athletes", "setters", "vault", "bio"];
+    
+    // Use local state so modal updates don't trigger global tree re-renders
+    const initialTabSafe = validTabs.includes(urlTab as string)
+        ? urlTab === "athletes"
+          ? "players"
+          : (urlTab as string)
+        : "players";
+    const [uiTab, setUiTab] = useState<string>(initialTabSafe);
+    const [contentTab, setContentTab] = useState<string>(initialTabSafe);
+    
+    const urlMode = searchParams.get("mode");
+    const eventTypeMode = searchParams.get("eventType");
+    const validModes = ["open", "all-time", "2026"];
+    
+    let initialModeSafe: "all-time" | "2026" = "all-time";
+    if (validModes.includes(urlMode as string)) {
+      initialModeSafe = urlMode as "all-time" | "2026";
+    } else if (validModes.includes(eventTypeMode as string)) {
+      initialModeSafe = eventTypeMode as "all-time" | "2026";
+    } else if (initialMode && validModes.includes(initialMode)) {
+      initialModeSafe = initialMode as "all-time" | "2026";
+    }
+    const [uiMode, setUiMode] = useState<"all-time" | "2026">(initialModeSafe);
+    const [contentMode, setContentMode] = useState<"all-time" | "2026">(initialModeSafe);
+
+    const {
+      tMeta,
+      players,
+      setters,
+      playerStats,
+      setterStats,
+      playerTuples,
+      setterTuples,
+      vaultItems,
+    } = useTeamDetailsData(team, contentMode, dataContext);
+
+    const randomPlayersPromo = useMemo(() => {
+      const types: PromoType[] = ["skool"];
+      return types[Math.floor(Math.random() * types.length)];
+    }, []);
+
+    const scrollRef = React.useContext(ModalScrollContext);
+
+    const scrollToTop = () => {
+      if (scrollRef?.current) {
+        if (scrollRef.current.scrollTop > 150) {
+          scrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+    };
+
+    return (
+      <div
+        className={cn(
+          "flex flex-col relative pb-32 transition-colors",
+          theme === "dark" ? "bg-[#030303]" : "bg-white",
+        )}
+      >
+        <ProfileHeader
+          theme={theme}
+          avatar={<FallbackAvatar name={tMeta?.name || team.name} sizeCls="text-3xl" />}
+          title={
+            <span className="flex items-center gap-2">
+              <span className="shrink-0 leading-none">{getCombinedFlags(tMeta || team) || "🏳️"}</span>
+              <span className="truncate">{tMeta?.name || team.name}</span>
+            </span>
+          }
+          subtitle={
+            <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest mt-1">
+              <Globe size={12} />
+              <span className="truncate">{formatLocation(tMeta || team) || "UNKNOWN LOC"}</span>
+            </div>
+          }
+        />
+
+        <div
+          className={cn(
+            "flex items-center justify-center border-b sticky top-0 z-40 backdrop-blur-3xl transition-colors py-2",
+            theme === "dark"
+              ? "border-white/5 bg-zinc-950/80 shadow-[0_4px_30px_rgba(0,0,0,0.1)]"
+              : "border-black/5 bg-white/90 shadow-[0_4px_30px_rgba(0,0,0,0.03)]",
+          )}
+        >
+          <div className="flex w-full max-w-2xl px-4">
+            <ASRNeonToggle
+              options={[
+                { label: "PLAYERS", value: "players" },
+                { label: "SETTERS", value: "setters" },
+              ]}
+              activeOption={uiTab}
+              onChange={(t) => {
+                setUiTab(t);
+                React.startTransition(() => {
+                  setContentTab(t);
+                });
+                scrollToTop();
+              }}
+              layoutId="team-tabs"
+              theme={theme}
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            "flex flex-col flex-1 transition-colors",
+            theme === "dark" ? "bg-[#030303]" : "bg-white",
+          )}
+        >
+          {contentTab === "bio" && (
+            <InspectorTabContainer>
+              <div className="flex flex-col gap-4">
+                <SectionTitle>GYM PROFILE</SectionTitle>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(tMeta?.website || team?.website) && (
+                    <BioRow
+                      theme={theme}
+                      icon={<Globe size={18} />}
+                      label="WEBSITE"
+                      value={String(tMeta?.website || team?.website).replace(/^https?:\/\//, '')}
+                      href={String(tMeta?.website || team?.website).startsWith('http') ? String(tMeta?.website || team?.website) : `https://${tMeta?.website || team?.website}`}
+                    />
+                  )}
+                  {(tMeta?.instagram || team?.instagram) && (
+                    <BioRow
+                      theme={theme}
+                      icon={<Instagram size={18} />}
+                      label="INSTAGRAM"
+                      value={`@${(tMeta?.instagram || team?.instagram)}`}
+                      href={`https://instagram.com/${(tMeta?.instagram || team?.instagram)}`}
+                    />
+                  )}
+                  {(tMeta?.youtube || team?.youtube) && (
+                    <BioRow
+                      theme={theme}
+                      icon={<Youtube size={18} />}
+                      label="YOUTUBE"
+                      value={String(tMeta?.youtube || team?.youtube)}
+                      href={`https://youtube.com/${String(tMeta?.youtube || team?.youtube)}`}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <SectionTitle>ROSTER</SectionTitle>
+                <div className="grid grid-cols-2 gap-3">
+                  <BioStat
+                    theme={theme}
+                    label="PLAYERS"
+                    value={players.length}
+                  />
+                  <BioStat
+                    theme={theme}
+                    label="SETTERS"
+                    value={setters.length}
+                  />
+                </div>
+              </div>
+            </InspectorTabContainer>
+          )}
+          {contentTab === "players" && (
+            <div className="animate-in fade-in duration-300 flex flex-col h-full overflow-visible">
+              <div
+                className={cn(
+                  "flex justify-center border-b transition-colors overflow-visible sticky top-[46px] z-30 py-3",
+                  theme === "dark"
+                    ? "border-white/[0.05] bg-zinc-950/80 backdrop-blur-xl"
+                    : "border-black/[0.05] bg-white/90 backdrop-blur-xl",
+                )}
+              >
+                <ASRNeonToggle
+                  options={[
+                    { label: "ALL-TIME", value: "all-time" },
+                    { label: "2026", value: "2026" },
+                    
+                  ]}
+                  activeOption={uiMode}
+                  onChange={(m) => {
+                    const nextMode = m as "all-time" | "2026";
+                    setUiMode(nextMode);
+                    React.startTransition(() => {
+                      setContentMode(nextMode);
+                    });
+                    scrollToTop();
+                  }}
+                  layoutId="team-mode-pill"
+                  theme={theme}
+                  className="w-full max-w-[280px]"
+                />
+              </div>
+
+              <div className="flex flex-col p-6 gap-10">
+                <div className="grid grid-cols-2 gap-4">
+                  <ASRStatCard label="POINTS" value={playerStats.points.toFixed(2)} />
+                  <ASRStatCard label="SENDS" value={playerStats.sends} />
+                </div>
+
+                <div className="flex flex-col gap-6 pt-2">
+                  <SectionTitle>VERIFIED PLAYERS</SectionTitle>
+                  <ASRRankList
+                    athletes={playerTuples}
+                    valueLabel="PTS"
+                    dataContext={dataContext}
+                    onEntityClick={onEntityClick}
+                    entityType="player"
+                    hideSubtitle={true}
+                  />
+                </div>
+                <div className="pt-8">
+                  <ASRPromotionBanner type={randomPlayersPromo} theme={theme} />
+                </div>
+              </div>
+            </div>
+          )}
+          {contentTab === "setters" && (
+            <InspectorTabContainer>
+              <div className="grid grid-cols-2 gap-4">
+                <ASRStatCard label="IMPACT" value={setterStats.impact.toFixed(2)} />
+                <ASRStatCard label="SETS" value={setterStats.sets} />
+              </div>
+
+              <div className="flex flex-col gap-6 pt-2">
+                <SectionTitle>VERIFIED SETTERS</SectionTitle>
+                <ASRRankList
+                  athletes={setterTuples}
+                  valueLabel="IMPACT"
+                  dataContext={dataContext}
+                  onEntityClick={onEntityClick}
+                  entityType="setter"
+                  hideSubtitle={true}
+                />
+              </div>
+              <div className="pt-8">
+                <ASRPromotionBanner type="setter" theme={theme} />
+              </div>
+            </InspectorTabContainer>
+          )}
+
+          {contentTab === "vault" && (
+            <InspectorTabContainer className="gap-14 text-center">
+              <div className="flex flex-col gap-5">
+                <SectionTitle noPadding>BONUSES</SectionTitle>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {vaultItems.tokens.map((token) => (
+                    <TokenChip key={token.id} token={token} theme={theme} />
+                  ))}
+                </div>
+              </div>
+            </InspectorTabContainer>
+          )}
+        </div>
+      </div>
+    );
+  },
+);

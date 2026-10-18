@@ -1,0 +1,205 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import React from "react";
+import { Search, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { cn } from "../../lib/asr-utils";
+
+interface ASRSearchInputProps {
+  value: string;
+  onChange: (
+    e: React.ChangeEvent<HTMLInputElement> | { target: { value: string } },
+  ) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  theme: "light" | "dark";
+  placeholder?: string;
+  className?: string;
+  variant?: "default" | "pill" | "docked";
+  rightElement?: React.ReactNode;
+  enableFocusShortcut?: "cmd-k" | "slash";
+}
+
+export const ASRSearchInput = React.memo(
+  ({
+    value,
+    onChange,
+    onKeyDown,
+    onFocus,
+    onBlur,
+    theme,
+    placeholder = "",
+    className,
+    variant = "default",
+    rightElement,
+    enableFocusShortcut,
+  }: ASRSearchInputProps) => {
+    const [isFocused, setIsFocused] = React.useState(false);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    const radiusClass =
+      variant === "docked"
+        ? "rounded-none"
+        : variant === "pill"
+          ? "rounded-full"
+          : "rounded-2xl";
+
+    React.useEffect(() => {
+      if (!enableFocusShortcut) return;
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (
+          enableFocusShortcut === "cmd-k" &&
+          (e.metaKey || e.ctrlKey) &&
+          e.key === "k"
+        ) {
+          e.preventDefault();
+          inputRef.current?.focus();
+        } else if (
+          enableFocusShortcut === "slash" &&
+          e.key === "/" &&
+          document.activeElement?.tagName !== "INPUT" &&
+          document.activeElement?.tagName !== "TEXTAREA"
+        ) {
+          e.preventDefault();
+          inputRef.current?.focus();
+          // Select all text if it was already focused to easily overwrite
+          setTimeout(() => inputRef.current?.select(), 0);
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [enableFocusShortcut]);
+
+    return (
+      <div
+        aria-label="Clear search"
+        className={cn("relative group", className)}
+      >
+        <div
+          aria-label="Clear search"
+          className={cn(
+            `relative flex items-center h-12 ${radiusClass} border transition-all duration-300 overflow-hidden`,
+            theme === "dark"
+              ? "bg-zinc-900/80 border-white/10 focus-within:border-white/20 focus-within:bg-zinc-900 shadow-[0_4px_24px_rgba(0,0,0,0.5)] backdrop-blur-md"
+              : "bg-white border-slate-200 focus-within:border-slate-300 focus-within:bg-white shadow-sm shadow-black/5 backdrop-blur-md",
+            (variant === "pill" || variant === "docked") && "shadow-none",
+            variant === "docked" &&
+              "border-x-0 border-t-0 bg-transparent dark:bg-transparent backdrop-blur-none",
+          )}
+        >
+          {/* Moving Neon Border Effect when focused */}
+          <div
+            className={`absolute inset-0 ${radiusClass} z-0 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity duration-300`}
+          >
+            {/* Ambient Glow */}
+            <div
+              className={`absolute inset-0 neon-gradient-base animate-border-shift blur-[8px] opacity-40 ${radiusClass}`}
+            />
+            {/* Outline gradient */}
+            <div
+              className={`absolute inset-0 neon-gradient-base animate-border-shift opacity-80 ${radiusClass}`}
+            />
+            {/* Inner Surface Fill */}
+            <div
+              aria-label="Clear search"
+              className={cn(
+                `absolute inset-[1.5px] ${radiusClass} backdrop-blur-xl z-20`,
+                theme === "dark" ? "bg-zinc-950/90" : "bg-white",
+              )}
+            />
+          </div>
+
+          <div
+            aria-label="Clear search"
+            className={cn(
+              "absolute left-4 opacity-40 group-focus-within:opacity-100 transition-all z-30 pointer-events-none",
+              theme === "dark"
+                ? "group-focus-within:text-white"
+                : "group-focus-within:text-zinc-900",
+            )}
+          >
+            <Search size={16} strokeWidth={3} />
+          </div>
+          <style>{`
+            input[type="search"]::-webkit-search-decoration,
+            input[type="search"]::-webkit-search-cancel-button,
+            input[type="search"]::-webkit-search-results-button,
+            input[type="search"]::-webkit-search-results-decoration {
+              -webkit-appearance:none;
+            }
+          `}</style>
+          <input
+            ref={inputRef}
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={value}
+            onChange={onChange}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                onChange({ target: { value: "" } } as any);
+                inputRef.current?.blur();
+              }
+              if (onKeyDown) onKeyDown(e);
+            }}
+            onFocus={(e) => {
+              setIsFocused(true);
+              if (onFocus) onFocus(e);
+            }}
+            onBlur={(e) => {
+              setIsFocused(false);
+              if (onBlur) onBlur(e);
+            }}
+            style={{ scrollMarginBottom: "120px" }}
+            placeholder={isFocused ? "" : placeholder}
+            aria-label="Clear search"
+            className={cn(
+              "w-full h-full pl-10 bg-transparent outline-none text-[16px] placeholder:text-[15px] sm:placeholder:text-[16px] font-black uppercase tracking-widest placeholder:opacity-40 placeholder:normal-case placeholder:font-medium placeholder:tracking-normal z-30 relative appearance-none",
+              theme === "dark"
+                ? "text-white placeholder:text-white"
+                : "text-zinc-900 placeholder:text-zinc-900",
+              rightElement
+                ? "pr-24"
+                : enableFocusShortcut
+                  ? "pr-4 sm:pr-12"
+                  : "pr-4",
+            )}
+          />
+          <div className="absolute right-1 flex items-center gap-1 z-30">
+            <AnimatePresence>
+              {value && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => {
+                    onChange({ target: { value: "" } } as any);
+                    inputRef.current?.focus();
+                  }}
+                  aria-label="Clear search"
+                  className={cn(
+                    "w-8 h-8 mr-1 flex flex-shrink-0 items-center justify-center rounded-full opacity-40 hover:opacity-80 transition-all outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 active:scale-95",
+                    theme === "dark"
+                      ? "text-white hover:bg-white/10"
+                      : "text-zinc-900 hover:bg-black/5",
+                  )}
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </motion.button>
+              )}
+            </AnimatePresence>
+            {enableFocusShortcut && !value && !isFocused && (
+              <div className="hidden sm:flex items-center justify-center px-1.5 h-6 rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mr-2 border border-b-2 border-black/5 dark:border-white/10 pointer-events-none shadow-sm">
+                {enableFocusShortcut === "cmd-k" ? "⌘K" : "/"}
+              </div>
+            )}
+            {rightElement}
+          </div>
+        </div>
+      </div>
+    );
+  },
+);

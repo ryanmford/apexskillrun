@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover">
+    
+    <!-- Primary Meta Tags -->
+    <title>APEX SKILL RUN</title>
+    <meta name="title" content="APEX SKILL RUN">
+    <meta name="description" content="FINDING THE HIGHEST SKILLED HUMANS IRL 🌎 🌍 🌏">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://apexskillrun.com/">
+    <meta property="og:title" content="APEX SKILL RUN | FINDING THE HIGHEST SKILLED HUMANS IRL 🌎 🌍 🌏">
+    <meta property="og:description" content="TRACK YOUR PARKOUR CHALLENGES, COMPETE WITH ATHLETES WORLDWIDE, AND CLIMB THE RANKS TO BECOME THE ULTIMATE CHAMPION.">
+    <!-- Using the ASR logo as a fallback share image -->
+    <meta property="og:image" content="https://apexskillrun.com/apexskillrun.png">
+    <meta property="og:site_name" content="APEX SKILL RUN">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://apexskillrun.com/">
+    <meta property="twitter:title" content="APEX SKILL RUN | FINDING THE HIGHEST SKILLED HUMANS IRL 🌎 🌍 🌏">
+    <meta property="twitter:description" content="TRACK YOUR PARKOUR CHALLENGES, COMPETE WITH ATHLETES WORLDWIDE, AND CLIMB THE RANKS TO BECOME THE ULTIMATE CHAMPION.">
+    <meta property="twitter:image" content="https://apexskillrun.com/apexskillrun.png">
+
+    <!-- PWA Setup -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Apex">
+    <link rel="icon" type="image/png" href="/apexskillrun.png">
+    <link rel="apple-touch-icon" href="/apexskillrun.png">
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-B4W7YVST8N"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-B4W7YVST8N', { send_page_view: false });
+    </script>
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090b">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f8fafc">
+
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://api.mapbox.com">
+
+    <!-- Fonts -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    </noscript>
+    
+    <style>
+        /* Premium Loading State Styling */
+        #root:empty {
+            height: 100dvh;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #000;
+        }
+        
+        #root:empty::before {
+            content: "SCANNING LIVE STATS";
+            color: #3b82f6;
+            font-weight: 900;
+            letter-spacing: 0.4em;
+            font-size: 12px;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+        }
+        
+        @keyframes pulse { 
+            0%, 100% { opacity: 1; transform: scale(1); } 
+            50% { opacity: 0.5; transform: scale(0.98); } 
+        }
+    </style>
+  </head>
+  <body class="overflow-x-clip">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

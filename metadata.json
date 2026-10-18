@@ -1,0 +1,10 @@
+{
+  "name": "Apex Skill Run",
+  "description": "ASR Leaderboard and Skill Directory",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

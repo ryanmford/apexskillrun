@@ -1,0 +1,266 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
+import React, { useMemo } from "react";
+import { cn, fixCountryEntity, formatFlagsWithSpace, THEME, trackEvent } from "../../lib/asr-utils";
+import { Trophy, Calendar, Play } from "lucide-react";
+import { useAppNavigation } from "../../hooks/useDerivedData";
+import { useAppStore } from "../../store/useAppStore";
+import { formatYYYYMMDD } from "../../lib/asr-utils";
+
+interface ChampionsProps {
+ sends: any[];
+ theme: "light" | "dark";
+}
+
+export const SkillChampions = ({ sends, theme }: ChampionsProps) => {
+ const { navigateToEntity } = useAppNavigation();
+ const setPlayingVideoUrl = useAppStore(s => s.setPlayingVideoUrl);
+
+ const getChampions = (genderFilter: string) => {
+ const valid = sends
+ .filter((r) => {
+ const timeVal = typeof r.num === "number" ? r.num : r.time;
+ // Accept only sends strictly under this gender
+ return timeVal && timeVal > 0 && r.gender === genderFilter;
+ })
+ .map((r) => {
+ const timeVal = typeof r.num === "number" ? r.num : r.time;
+ const validDate = r.date ? new Date(r.date) : null;
+ const isDateValid = validDate && !isNaN(validDate.getTime());
+ return {
+ ...r,
+ timeVal,
+ dateMs: isDateValid ? validDate.getTime() : 0,
+ dateStr: isDateValid ? formatYYYYMMDD(validDate) : "Unknown Date"
+ };
+ })
+ .sort((a, b) => a.dateMs - b.dateMs);
+
+ if (valid.length === 0) return [];
+
+ let currentWR = Infinity;
+ const wrs = [];
+
+ for (const send of valid) {
+ if (send.timeVal < currentWR) {
+ currentWR = send.timeVal;
+ const dateStr = send.dateStr;
+ // If there's already a WR from the exact same date, replace it with this faster one
+ if (wrs.length > 0 && wrs[wrs.length - 1].date === dateStr) {
+ wrs[wrs.length - 1] = {
+ time: send.timeVal,
+ date: dateStr,
+ dateMs: send.dateMs,
+ pKey: send.pKey,
+ athlete: send.athlete || send.pKey || "Unknown",
+ country: send.country,
+ flag: send.flag,
+ videoUrl: send.videoUrl || send.demoVideo,
+ isInterim: send.isInterim,
+ };
+ } else {
+ wrs.push({
+ time: send.timeVal,
+ date: dateStr,
+ dateMs: send.dateMs,
+ pKey: send.pKey,
+ athlete: send.athlete || send.pKey || "Unknown",
+ country: send.country,
+ flag: send.flag,
+ videoUrl: send.videoUrl || send.demoVideo,
+ isInterim: send.isInterim,
+ });
+ }
+ }
+ }
+
+ for (let i = 0; i < wrs.length; i++) {
+ const currentDataMs = wrs[i].dateMs;
+ let nextDateMs = Date.now();
+ if (i < wrs.length - 1) {
+ nextDateMs = wrs[i + 1].dateMs;
+ }
+ 
+ if (currentDataMs === 0 || nextDateMs === 0) {
+ wrs[i].daysHeld = 0;
+ } else {
+ const diffMs = nextDateMs - currentDataMs;
+ wrs[i].daysHeld = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+ }
+ }
+
+ // Return reverse chronological: newest WR first
+ return wrs.reverse();
+ };
+
+ const mensChamps = useMemo(() => getChampions("M"), [sends]);
+ const womensChamps = useMemo(() => getChampions("F"), [sends]);
+
+ if (mensChamps.length === 0 && womensChamps.length === 0) {
+ return (
+ <div
+ className={cn(
+ "text-center py-6 text-xs font-bold tracking-widest uppercase",
+ theme === "dark" ? "text-zinc-600" : "text-zinc-400",
+ )}
+ >
+ No Challenge Records Yet
+ </div>
+ );
+ }
+
+ const renderChampsList = (champs: any[], label: string) => {
+ if (champs.length === 0) return null;
+ return (
+ <div className="flex flex-col gap-3">
+ <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-zinc-500 mb-1">
+ {label}
+ </span>
+ <div className="flex flex-col gap-2 relative">
+ {/* timeline line */}
+ <div
+ className={cn(
+ "absolute left-[29px] top-4 bottom-4 w-[2px]",
+ "bg-black/10 dark:bg-white/10",
+ )}
+ />
+ {champs.map((champ, i) => (
+ <div
+ key={i}
+ role="button"
+ tabIndex={champ.isInterim ? -1 : 0}
+ onKeyDown={(e) => {
+ if (champ.isInterim) return;
+ if (e.key === 'Enter' || e.key === ' ') {
+ e.preventDefault();
+ navigateToEntity("player", { pKey: champ.pKey || champ.athlete, name: champ.athlete });
+ }
+ }}
+ onClick={() => {
+   if (!champ.isInterim) {
+     navigateToEntity("player", { pKey: champ.pKey || champ.athlete, name: champ.athlete });
+   }
+ }}
+ className={cn(
+ "group flex flex-col relative pl-[58px] pr-5 py-3.5 text-left w-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+ "theme-focus",
+ THEME.BENTO_CARD(theme),
+ i === 0 ? "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]" : "",
+ champ.isInterim ? "opacity-60 grayscale pointer-events-none" : ""
+ )}
+ >
+ <div
+ className={cn(
+ "absolute left-[12px] top-1/2 -translate-y-1/2 w-[34px] h-[34px] rounded-full border-4 flex items-center justify-center transition-colors",
+ theme === "dark" ? "bg-[#050505] border-[#050505] group-hover:bg-zinc-800 group-hover:border-zinc-800" : "bg-white border-white group-hover:bg-zinc-50 group-hover:border-zinc-50",
+ i === 0
+ ? "text-amber-500"
+ : theme === "dark"
+ ? "text-zinc-600"
+ : "text-zinc-400",
+ )}
+ >
+ {i === 0 ? (
+ <Trophy size={14} className="fill-amber-500/20" />
+ ) : (
+ <Trophy size={14} className="fill-current opacity-30" />
+ )}
+ </div>
+ <div className="flex justify-between items-center w-full min-w-0 gap-3">
+ <div className="flex flex-col flex-1 min-w-0">
+ <span
+ className={cn(
+ "font-black text-sm uppercase tracking-tight truncate",
+ i === 0
+ ? "theme-text-base"
+ : "theme-text-muted",
+ )}
+ >
+ {(champ.flag || champ.country) && (
+ <span className="mr-1 inline-block drop-shadow-sm whitespace-nowrap">
+ {formatFlagsWithSpace(champ.flag || fixCountryEntity(champ.country, "").flag)}
+ </span>
+ )}
+ {champ.athlete}
+ </span>
+ <span
+ className={cn(
+ "text-[10px] font-bold flex items-center flex-wrap gap-1 mt-0.5",
+ "theme-text-muted",
+ )}
+ >
+ <Calendar size={10} /> {champ.date}
+ {champ.daysHeld > 0 ? (
+ <span className="opacity-60 font-medium ml-1">
+ • {i === 0 ? "Active for" : "Held for"} {champ.daysHeld} {champ.daysHeld === 1 ? 'day' : 'days'}
+ </span>
+ ) : i > 0 ? (
+ <span className="opacity-60 font-medium ml-1">
+ • Held for {"< 1"} day
+ </span>
+ ) : null}
+ </span>
+ </div>
+ <div className="flex items-center gap-4 pr-0 shrink-0 h-full">
+  <div className="flex flex-col items-end justify-center text-right min-w-[50px] sm:min-w-[60px]">
+  <div
+  className={cn(
+  "font-black text-lg sm:text-[20px] tabular-nums tracking-tighter transition-colors",
+  i === 0
+  ? "text-amber-500"
+  : theme === "dark"
+  ? "text-white"
+  : "text-zinc-900"
+  )}
+  >
+  {champ.time.toFixed(2)}
+  </div>
+  <div
+  className={cn(
+  "text-[11px] sm:text-[12px] font-bold tabular-nums transition-colors mt-[-2px]",
+  i === 0
+  ? theme === "dark" ? "text-amber-500/80" : "text-amber-600/80"
+  : theme === "dark" ? "text-white/50" : "text-zinc-500"
+  )}
+  >
+  {i === 0 ? "100.00" : ((champs[0].time / champ.time) * 100).toFixed(2)}
+  </div>
+  </div>
+  <div className="flex items-center justify-center shrink-0 w-8">
+  {champ.videoUrl ? (
+  <button
+  type="button"
+  onClick={(e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  trackEvent("outbound_click", {
+  link_url: champ.videoUrl,
+  link_type: "video",
+  });
+  setPlayingVideoUrl(champ.videoUrl);
+  }}
+  className={THEME.ICON_BUTTON(theme)}
+  >
+  <Play
+  className="w-[18px] h-[18px] sm:w-[20px] sm:h-[20px]"
+  strokeWidth={3}
+  />
+  </button>
+  ) : null}
+  </div>
+  </div>
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ );
+ };
+
+ return (
+ <div className="flex flex-col gap-6 w-full mt-2">
+ {renderChampsList(mensChamps, "MEN")}
+ {renderChampsList(womensChamps, "WOMEN")}
+ </div>
+ );
+};
