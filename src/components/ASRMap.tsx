@@ -10,6 +10,20 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { trackEvent, cn } from "../lib/asr-utils";
 import { ThemeContext } from "../theme-context";
 import { useAppStore } from "../store/useAppStore";
+import { SkillData } from "../types";
+
+export interface ASRMapProps {
+  challenges?: SkillData[];
+  totalSkills?: number;
+  searchQuery?: string;
+  onSkillClick?: (skill: SkillData) => void;
+  onPinClick?: (skill: SkillData) => void;
+  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  onMapClick?: () => void;
+  theme?: string | null;
+  className?: string;
+  hideControls?: boolean;
+}
 
 export const ASRMap = forwardRef(({
   challenges = [],
@@ -22,12 +36,17 @@ export const ASRMap = forwardRef(({
   theme: propTheme,
   className,
   hideControls = false,
-}: any, ref: any) => {
+}: ASRMapProps, ref: any) => {
   const contextTheme = useContext(ThemeContext);
   const theme = propTheme || contextTheme;
   const isDark = theme === "dark";
 
   const activeSkillId = useAppStore(s => s.activeSkillId);
+  const activeSkillIdRef = useRef(activeSkillId);
+  useEffect(() => {
+    activeSkillIdRef.current = activeSkillId;
+  }, [activeSkillId]);
+
   const isLocating = useAppStore(s => s.isMapLocating);
   const setIsLocating = useAppStore(s => s.setIsMapLocating);
   const mapReady = useAppStore(s => s.isMapReady);
@@ -145,24 +164,38 @@ export const ASRMap = forwardRef(({
       keyboard: true,
     }).setView(defaultCenter, defaultZoom);
 
-    const MAPBOX_TOKEN =
+    const mapboxToken =
+      (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string) ||
       (import.meta.env.VITE_MAPBOX_TOKEN as string) ||
       (typeof atob === "function"
         ? atob("cGsuZXlKMUlqb2lZWEJsZUcxdmRtVnRaVzUwSWl3aVlTSTZJbU50ZEdJMmMycHBOakE0TTJzeWVIQjRiM041ZDJ4dU5XY2lmUS5hdFAzRW55VmVzSFJsSnlVZldGUU5n")
         : "");
-    const lightTile = `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`;
-    const darkTile = `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`;
 
-    const lightLayer = L.tileLayer(lightTile, {
+    let lightTileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    let darkTileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+    if (mapboxToken) {
+      const lightStyle = import.meta.env.VITE_MAPBOX_LIGHT_STYLE || "mapbox/light-v11";
+      const darkStyle = import.meta.env.VITE_MAPBOX_DARK_STYLE || "mapbox/dark-v11";
+      lightTileUrl = `https://api.mapbox.com/styles/v1/${lightStyle}/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`;
+      darkTileUrl = `https://api.mapbox.com/styles/v1/${darkStyle}/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`;
+    }
+
+    const lightLayer = L.tileLayer(lightTileUrl, {
       maxZoom: 20,
       noWrap: true,
       className: "transition-opacity duration-[1000ms] ease-in-out",
     }).addTo(map);
 
-    const darkLayer = L.tileLayer(darkTile, {
+    let darkLayerClass = "transition-opacity duration-[1000ms] ease-in-out";
+    if (!mapboxToken) {
+      darkLayerClass += " map-tiles-dark";
+    }
+
+    const darkLayer = L.tileLayer(darkTileUrl, {
       maxZoom: 20,
       noWrap: true,
-      className: "transition-opacity duration-[1000ms] ease-in-out",
+      className: darkLayerClass,
     }).addTo(map);
 
     lightLayer.setOpacity(isDarkRef.current ? 0 : 1);
@@ -310,8 +343,32 @@ export const ASRMap = forwardRef(({
     }
   }, [isDark]);
 
+  // Helpers for hover feature
+  const getSkillDisplayName = (fullName: string): string => {
+    if (!fullName) return "";
+    const trimmed = fullName.trim();
+    const match = trimmed.match(/^(.*?)(?:\s+SKILL[\s_-]*RUN|\s+SKILLRUN|\s+CHALLENGE)/i);
+    if (match && match[1].trim()) {
+      return match[1].trim();
+    }
+    const fallbackMatch = trimmed.match(/^(.*?)(?:SKILL[\s_-]*RUN|SKILLRUN)/i);
+    if (fallbackMatch && fallbackMatch[1].trim()) {
+      return fallbackMatch[1].trim();
+    }
+    return trimmed;
+  };
+
+  const escapeHtml = (str: string): string => {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  };
+
   // Helper to create marker icon
-  const createPinIcon = (isActive: boolean) => {
+  const createPinIcon = (skillName: string, isActive: boolean) => {
     const currentIsDark = isDarkRef.current;
     const outerShadow = currentIsDark ? 'shadow-[0_4px_12px_rgba(0,0,0,0.6)]' : 'shadow-[0_4px_12px_rgba(0,0,0,0.2)]';
     const innerSurface = currentIsDark 
@@ -326,11 +383,29 @@ export const ASRMap = forwardRef(({
       ? 'from-white/80'
       : 'from-zinc-900/60';
 
+    const tooltipClasses = currentIsDark
+      ? 'bg-zinc-950/95 text-white border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.85)]'
+      : 'bg-white/95 text-zinc-950 border-black/15 shadow-[0_4px_16px_rgba(0,0,0,0.15)]';
+
     const activeOuterClasses = isActive ? 'scale-[1.5] z-[1000] brightness-125' : 'hover:scale-[1.15] active:scale-95 drop-shadow-lg';
     
+    const shortName = getSkillDisplayName(skillName);
+    const escapedShortName = escapeHtml(shortName);
+
+    const hoverPillHtml = escapedShortName
+      ? `<div class="absolute bottom-[38px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 group-hover:translate-y-0 scale-95 group-hover:scale-100 z-50 whitespace-nowrap">
+           <div class="relative flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md ${tooltipClasses}">
+             <span class="text-[10px] sm:text-[11px] font-mono font-black tracking-widest uppercase select-none leading-none">
+               ${escapedShortName}
+             </span>
+           </div>
+         </div>`
+      : "";
+
     return L.divIcon({
       html: `
         <div class="asr-pin relative flex flex-col items-center justify-center group transition-all duration-300 cursor-pointer ${activeOuterClasses}" style="width: 44px; height: 44px;">
+          ${hoverPillHtml}
           <div class="absolute inset-0 bg-transparent"></div>
           <div class="relative flex flex-col items-center mt-2">
             <div class="relative w-6 h-6 rounded-full flex items-center justify-center ${outerShadow}">
@@ -353,7 +428,7 @@ export const ASRMap = forwardRef(({
   useEffect(() => {
     if (!mapReady || !clusterGroupRef.current) return;
     
-    const currentSkillIds = new Set(challenges.map((c: any) => c.name));
+    const currentSkillIds = new Set(challenges.map((c: SkillData) => c.name));
     
     // Remove markers that are no longer in `challenges`
     const markersToRemove: L.Marker[] = [];
@@ -371,7 +446,7 @@ export const ASRMap = forwardRef(({
     // Add or update markers Let's add new markers without blowing up the whole cluster.
     const newMarkers: L.Marker[] = [];
 
-    challenges.forEach((c: any) => {
+    challenges.forEach((c: SkillData & { parsedCoords?: [number, number] }) => {
       const id = c.name;
       if (!c.parsedCoords) return;
 
@@ -379,7 +454,16 @@ export const ASRMap = forwardRef(({
 
       if (!markersRef.current.has(id)) {
          const marker = L.marker(c.parsedCoords, {
-            icon: createPinIcon(isActive)
+            icon: createPinIcon(c.name, isActive)
+         });
+
+         marker.on("mouseover", () => {
+            marker.setZIndexOffset(10000);
+         });
+
+         marker.on("mouseout", () => {
+            const isCurrentActive = activeSkillIdRef.current === id;
+            marker.setZIndexOffset(isCurrentActive ? 1000 : 0);
          });
 
          marker.on("click", (e) => {
@@ -388,7 +472,7 @@ export const ASRMap = forwardRef(({
 
             // Intelligent Panning
             const currentZoom = Math.max(mapRef.current.getZoom(), 12);
-            const pt = mapRef.current.project(c.parsedCoords, currentZoom);
+            const pt = mapRef.current.project(c.parsedCoords!, currentZoom);
             const isDesktop = window.innerWidth >= 768;
             
             if (!isDesktop) {
@@ -420,7 +504,7 @@ export const ASRMap = forwardRef(({
     if (!mapReady) return;
     for (const [id, marker] of markersRef.current.entries()) {
       const isActive = activeSkillId === id;
-      marker.setIcon(createPinIcon(isActive));
+      marker.setIcon(createPinIcon(id, isActive));
       
       // Feature: push to top visually
       if (isActive) {

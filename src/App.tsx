@@ -210,9 +210,23 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
           isTransparent={view === "home"}
           showSearch={view === "home"}
           leftSlot={view === "hof" ? (
-            <div className="flex items-center">
-              <h1 className="text-lg sm:text-xl font-black italic uppercase tracking-widest text-zinc-900 dark:text-zinc-100">HALL OF FAME</h1>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                if (document.scrollingElement) {
+                  document.scrollingElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                }
+                document.documentElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                document.body.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+              }}
+              className="flex items-center text-left cursor-pointer group outline-none select-none transition-transform active:scale-95 py-1 -my-1"
+              aria-label="Scroll to top of Hall of Fame"
+            >
+              <h1 className="text-lg sm:text-xl font-black italic uppercase tracking-widest text-zinc-900 dark:text-zinc-100 group-hover:text-blue-500 transition-colors">
+                HALL OF FAME
+              </h1>
+            </button>
           ) : undefined}
         />
       </div>
@@ -274,6 +288,7 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
                     <MapSkillsView theme={theme} />
                   </motion.div>
                 } />
+                <Route path="/wof" element={<Navigate to="/hof" replace />} />
                 <Route path="/hof" element={
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex flex-col">
                     <ASRWallOfFame

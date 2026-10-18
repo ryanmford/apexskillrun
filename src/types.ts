@@ -29,6 +29,8 @@ export interface PlayerProfile {
   currentRank?: number | string;
   isQualified?: boolean;
   shouldFade?: boolean;
+  cities?: number;
+  countries?: number;
 }
 
 export interface SkillData {

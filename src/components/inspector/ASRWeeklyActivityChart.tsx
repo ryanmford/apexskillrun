@@ -1,5 +1,6 @@
 import React, { useMemo, useContext, useState, useRef } from "react";
 import { cn } from "../../lib/utils";
+import { parseSafeDate } from "../../lib/asr-data";
 import { ThemeContext } from "../../theme-context";
 import { motion, AnimatePresence } from "motion/react";
 import { ASREmptyState } from "../common/ASREmptyState";
@@ -71,8 +72,9 @@ export const ASRWeeklyActivityChart = ({
 
     sends.forEach((r) => {
       if (!r.date) return;
-      const d = new Date(r.date);
-      if (isNaN(d.getTime())) return;
+      const parsed = parseSafeDate(r.date);
+      if (!parsed) return;
+      const d = new Date(parsed);
       d.setHours(0, 0, 0, 0);
 
       const runStartOfWeek = new Date(d);

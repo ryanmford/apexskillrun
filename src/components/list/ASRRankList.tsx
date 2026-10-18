@@ -8,6 +8,7 @@ import {
   getCombinedFlags,
   formatYYYYMMDD,
 } from "../../lib/asr-utils";
+import { parseSafeDate } from "../../lib/asr-data";
 import { ThemeContext } from "../../theme-context";
 import { ModalScrollContext } from "../common/ASRBaseModal";
 import { ASRSectionHeading } from "../common/ASRSectionHeading";
@@ -237,7 +238,7 @@ export const ASRRankList = ({
                           (item as any).date ? (
                             <span className="flex items-center gap-1">
                               <Calendar size={10} className="opacity-70" />{" "}
-                              {formatYYYYMMDD(new Date((item as any).date))}
+                              {formatYYYYMMDD(parseSafeDate((item as any).date) || new Date((item as any).date))}
                             </span>
                           ) : null
                         ) : (

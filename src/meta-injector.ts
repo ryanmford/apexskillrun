@@ -95,8 +95,10 @@ export async function getPageMeta(urlPath: string, searchParams: URLSearchParams
          
          const skillsCount = player.challenges || 0;
          const runsCount = player.sends || 0;
+         const firstSendsCount = player.firstSends || 0;
          
-         const newDesc = `CHALLENGES: ${skillsCount} | SENDS: ${runsCount}`;
+         let newDesc = `CHALLENGES: ${skillsCount} | SENDS: ${runsCount}`;
+         if (firstSendsCount > 0) newDesc += ` | 1ST SENDS: ${firstSendsCount}`;
 
          if (isAllTime) {
              description = newDesc.toUpperCase();
@@ -112,7 +114,7 @@ export async function getPageMeta(urlPath: string, searchParams: URLSearchParams
 
          ogType = 'player';
          ogStats = [
-             { value: rating, label: 'PTS' },
+             { value: rating, label: 'RATING' },
              { value: rank === 'UR' ? 'UR' : `${rank}`, label: 'RANK' }
          ];
          
@@ -126,7 +128,7 @@ export async function getPageMeta(urlPath: string, searchParams: URLSearchParams
          const completedSkills = [];
          const allSkills = Object.keys(cachedData.cMet || {});
          for (const c of allSkills) {
-           if (cachedData.lbAT?.M?.[c]?.[player.name] || cachedData.lbAT?.F?.[c]?.[player.name] || cachedData.lbSeason26?.M?.[c]?.[player.name] || cachedData.lbSeason26?.F?.[c]?.[player.name]) {
+           if (cachedData.lbAT?.M?.[c]?.[pKey] || cachedData.lbAT?.F?.[c]?.[pKey] || cachedData.lbSeason26?.M?.[c]?.[pKey] || cachedData.lbSeason26?.F?.[c]?.[pKey]) {
              completedSkills.push(c);
            }
          }
@@ -146,30 +148,20 @@ export async function getPageMeta(urlPath: string, searchParams: URLSearchParams
          const leaderboards = isAllTime ? cachedData.lbAT : (eventType === "2026" ? cachedData.lbSeason26 : cachedData.lbOP);
          
          let totalClears = 0;
-         let mBest = Infinity;
-         let fBest = Infinity;
-         
          if (leaderboards) {
             const mData = leaderboards.M?.[skillStr] || {};
             const fData = leaderboards.F?.[skillStr] || {};
-            
-            const mTimes = Object.values(mData) as number[];
-            const fTimes = Object.values(fData) as number[];
-            
-            totalClears = mTimes.length + fTimes.length;
-            if (mTimes.length) mBest = Math.min(...mTimes);
-            if (fTimes.length) fBest = Math.min(...fTimes);
+            totalClears = Object.keys(mData).length + Object.keys(fData).length;
          }
          
-         const best = Math.min(mBest, fBest);
          const locStr = skillInfo.city ? toTitleCase(skillInfo.city) : skillInfo.country ? toTitleCase(skillInfo.country) : 'Secret Location';
          
          const totalRunsCount = skillInfo.totalAllTimeRuns || skillInfo.totalRuns || totalClears;
          description = `SENDS: ${totalRunsCount} | 📍 ${locStr}`.toUpperCase();
          ogType = 'challenge';
          ogStats = [
-             { value: mBest !== Infinity ? mBest.toFixed(2) : '--', label: "WR (M)" },
-             { value: fBest !== Infinity ? fBest.toFixed(2) : '--', label: "WR (W)" }
+             { value: skillInfo.points ? String(skillInfo.points) : '--', label: "POINTS" },
+             { value: String(totalRunsCount), label: "SENDS" }
          ];
          ogMapCoords = skillInfo.parsedCoords || null;
       }

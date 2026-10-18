@@ -7,6 +7,7 @@ import {
   processLiveFeedData,
   processSetListData,
   processSettersData,
+  parseSafeDate,
 } from "./asr-data.ts";
 import { normalizeForSearch } from "./utils";
 
@@ -250,7 +251,7 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
 
   const parsedRuns = allRuns.map((r: any) => ({
     ...r,
-    timeMs: r.date ? new Date(r.date as string).getTime() : NaN
+    timeMs: r.date ? (parseSafeDate(r.date as string)?.getTime() ?? NaN) : NaN
   }));
 
   const undatedRuns = parsedRuns.filter(r => isNaN(r.timeMs));
@@ -731,8 +732,8 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
         if (Math.abs(b.pts - a.pts) > 0.001) {
           return b.pts - a.pts;
         }
-        const aDate = a.date ? new Date(a.date as string).getTime() : Infinity;
-        const bDate = b.date ? new Date(b.date as string).getTime() : Infinity;
+        const aDate = a.date ? (parseSafeDate(a.date as string)?.getTime() ?? Infinity) : Infinity;
+        const bDate = b.date ? (parseSafeDate(b.date as string)?.getTime() ?? Infinity) : Infinity;
         return aDate - bDate;
       });
 
@@ -740,7 +741,7 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
     let prevTime = -1;
     let prevDate = -1;
     return sorted.map((r, i) => {
-      const rDate = r.date ? new Date(r.date as string).getTime() : Infinity;
+      const rDate = r.date ? (parseSafeDate(r.date as string)?.getTime() ?? Infinity) : Infinity;
       if (r.time !== prevTime || rDate !== prevDate) {
         currentRank = i + 1;
         prevTime = r.time;

@@ -98,6 +98,10 @@ body {
   isolation: isolate;
 }
 
+.map-tiles-dark {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
 /* Hide iOS Safari's default large play button on videos in low power mode */
 video::-webkit-media-controls-start-playback-button {
   display: none !important;

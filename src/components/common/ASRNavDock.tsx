@@ -133,15 +133,15 @@ export const ASRNavDock = React.memo(
                   key={item.id}
                   aria-label={`View ${item.label}`}
                   onMouseEnter={() => {
-                    if (item.id === "map") import("../views/MapSkillsView");
+                    if (item.id === "challenges" || item.id === "map") import("../views/MapSkillsView");
                     if (item.id === "rankings") import("../views/RankingsView");
-                    if (item.id === "wall-of-fame")
+                    if (item.id === "hof" || item.id === "wall-of-fame")
                       import("../views/ASRWallOfFame");
                   }}
                   onTouchStart={() => {
-                    if (item.id === "map") import("../views/MapSkillsView");
+                    if (item.id === "challenges" || item.id === "map") import("../views/MapSkillsView");
                     if (item.id === "rankings") import("../views/RankingsView");
-                    if (item.id === "wall-of-fame")
+                    if (item.id === "hof" || item.id === "wall-of-fame")
                       import("../views/ASRWallOfFame");
                   }}
                   onClick={() => {
@@ -149,9 +149,16 @@ export const ASRNavDock = React.memo(
                       setIsSubmitModalOpen(true);
                       return;
                     }
-                    if (isActive) {
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                      triggerRefresh();
+                    if (isActive || (item.id === "hof" && currentView === "hof")) {
+                      window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                      if (document.scrollingElement) {
+                        document.scrollingElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                      }
+                      document.documentElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                      document.body.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                      if (window.scrollY < 40) {
+                        triggerRefresh();
+                      }
                     } else {
                       setView(item.id);
                     }

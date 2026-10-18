@@ -11,6 +11,16 @@ import {
 } from "./asr-utils";
 import { normalizeForSearch } from "./utils";
 
+export const parseSafeDate = (dStr: string | null | undefined): Date | null => {
+  if (!dStr) return null;
+  const s = String(dStr).trim();
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+    return new Date(s.replace(/-/g, "/"));
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+};
+
 const isFootwearTeam = (tName: string, shoeField?: string): boolean => {
   if (!tName) return false;
   const nLow = tName.toLowerCase().trim();
@@ -384,7 +394,7 @@ export const processLiveFeedData = (
         num: numericValue,
         time: numericValue,
         videoUrl: vals.proof || (vals.__raw && vals.__raw[7]) || "",
-        date: vals.date ? new Date(vals.date).toISOString() : null,
+        date: vals.date ? parseSafeDate(vals.date)?.toISOString() || null : null,
       });
 
       if (!athleteDisplayNameMap[pKey]) athleteDisplayNameMap[pKey] = pName;
@@ -430,7 +440,7 @@ export const processLiveFeedData = (
           value: vals.result,
           num: numericValue,
           videoUrl: vals.proof || (vals.__raw && vals.__raw[7]) || "",
-          date: vals.date ? new Date(vals.date).toISOString() : null,
+          date: vals.date ? parseSafeDate(vals.date)?.toISOString() || null : null,
         };
       }
     }
@@ -442,7 +452,7 @@ export const processLiveFeedData = (
     ) {
       allTimeAthleteLeaderboards[pGender][normC][pKey] = numericValue;
     }
-    const runDate = vals.date ? new Date(vals.date) : null;
+    const runDate = vals.date ? parseSafeDate(vals.date) : null;
     const isASROpenTag = (vals.tag || "").toUpperCase().includes("OPEN");
     const isInOpenWindow =
       runDate &&
@@ -462,7 +472,7 @@ export const processLiveFeedData = (
             value: vals.result,
             num: numericValue,
             videoUrl: vals.proof || (vals.__raw && vals.__raw[7]) || "",
-            date: vals.date ? new Date(vals.date).toISOString() : null,
+            date: vals.date ? parseSafeDate(vals.date)?.toISOString() || null : null,
           };
         }
         openAthleteTotalSubmissions[pKey] =
@@ -486,8 +496,8 @@ export const processLiveFeedData = (
         if (dateStr.includes("2026") || /\/(?:20)?26(?:\s|$)/.test(dateStr) || dateStr.endsWith("/26")) {
             is2026 = true;
         } else {
-            const d = new Date(dateStr);
-            if (!isNaN(d.getTime()) && d.getFullYear() === 2026) is2026 = true;
+            const d = parseSafeDate(dateStr);
+            if (d && d.getFullYear() === 2026) is2026 = true;
         }
     }
 
@@ -503,7 +513,7 @@ export const processLiveFeedData = (
             value: vals.result,
             num: numericValue,
             videoUrl: vals.proof || (vals.__raw && vals.__raw[7]) || "",
-            date: vals.date ? new Date(vals.date).toISOString() : null,
+            date: vals.date ? parseSafeDate(vals.date)?.toISOString() || null : null,
           };
         }
         season26AthleteTotalSubmissions[pKey] = (season26AthleteTotalSubmissions[pKey] || 0) + 1;
@@ -601,8 +611,8 @@ export const processLiveFeedData = (
   const chronologicalRuns = [...dataRows]
     .filter((send: Record<string, unknown>) => !isPlaceholderPlayer((String(send.athlete) || "").trim()))
     .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-      const dateA = a.date ? new Date(a.date as string).getTime() : 0;
-      const dateB = b.date ? new Date(b.date as string).getTime() : 0;
+      const dateA = a.date ? parseSafeDate(a.date as string)?.getTime() || 0 : 0;
+      const dateB = b.date ? parseSafeDate(b.date as string)?.getTime() || 0 : 0;
       return dateB - dateA;
     })
     .slice(0, 100);
@@ -648,11 +658,11 @@ export const processLiveFeedData = (
 
   const athleteFirstSendsMap: Record<string, number> = {};
   Object.keys(skillRunsHistory).forEach((normC) => {
-    const runs = skillRunsHistory[normC].filter(r => (r as any).date);
+    const runs = skillRunsHistory[normC].filter(r => parseSafeDate((r as any).date));
     if (runs.length > 0) {
-      runs.sort((a, b) => new Date((a as any).date).getTime() - new Date((b as any).date).getTime());
-      const firstDate = new Date((runs[0] as any).date).getTime();
-      const firstRunners = Array.from(new Set(runs.filter(r => new Date((r as any).date).getTime() === firstDate).map(r => (r as any).pKey)));
+      runs.sort((a, b) => (parseSafeDate((a as any).date)?.getTime() || 0) - (parseSafeDate((b as any).date)?.getTime() || 0));
+      const firstDate = parseSafeDate((runs[0] as any).date)?.getTime() || 0;
+      const firstRunners = Array.from(new Set(runs.filter(r => (parseSafeDate((r as any).date)?.getTime() || 0) === firstDate).map(r => (r as any).pKey)));
       firstRunners.forEach(pKey => {
         athleteFirstSendsMap[pKey] = (athleteFirstSendsMap[pKey] || 0) + 1;
       });
@@ -673,8 +683,8 @@ export const processLiveFeedData = (
       const totalskillPoints = perfs.reduce((sum: number, p: { skillPoints?: number }) => sum + (p.skillPoints || 0), 0);
       const latestRunDate = perfs.reduce((latest: Date, p: { date?: string | null }) => {
         if (!p.date) return latest;
-        const runDate = new Date(p.date);
-        if (isNaN(runDate.getTime())) return latest;
+        const runDate = parseSafeDate(p.date);
+        if (!runDate) return latest;
         return runDate > latest ? runDate : latest;
       }, new Date(0));
       return {
@@ -718,8 +728,8 @@ export const processLiveFeedData = (
       const totalskillPoints = perfs.reduce((sum: number, p: { skillPoints?: number }) => sum + (p.skillPoints || 0), 0);
       const latestRunDate = perfs.reduce((latest: Date, p: { date?: string | null }) => {
         if (!p.date) return latest;
-        const runDate = new Date(p.date);
-        if (isNaN(runDate.getTime())) return latest;
+        const runDate = parseSafeDate(p.date);
+        if (!runDate) return latest;
         return runDate > latest ? runDate : latest;
       }, new Date(0));
       return {
@@ -749,13 +759,11 @@ export const processLiveFeedData = (
     });
 
 
-  console.log("DUMP keys length:", Object.keys(athleteMetadata).length);
   result.allTimeRankings = Object.keys(athleteMetadata)
     .filter((k) => {
       const meta = athleteMetadata[k];
       const perfs = result.allTimePerformances[k] || [];
-      // Include them if they have sends OR sets OR contribution score
-      return !isPlaceholderPlayer(meta.name) && (perfs.length > 0 || (meta.sets || 0) > 0 || (meta.contributionScore || 0) > 0);
+      return !isPlaceholderPlayer(meta.name) && perfs.length > 0;
     })
     .map((pKey) => {
       const meta = athleteMetadata[pKey];
@@ -765,8 +773,8 @@ export const processLiveFeedData = (
       const totalskillPoints = perfs.reduce((sum: number, p: { skillPoints?: number }) => sum + (p.skillPoints || 0), 0);
       const latestRunDate = perfs.reduce((latest: Date, p: { date?: string | null }) => {
         if (!p.date) return latest;
-        const runDate = new Date(p.date);
-        if (isNaN(runDate.getTime())) return latest;
+        const runDate = parseSafeDate(p.date);
+        if (!runDate) return latest;
         return runDate > latest ? runDate : latest;
       }, new Date(0));
       return {
@@ -801,23 +809,43 @@ export const processLiveFeedData = (
 
 export const calculateWofStats = (
   data: PlayerProfile[],
-  atPerfs: Record<string, any[]>,
+  atPerfs: Record<string, { city?: string; country?: string; label?: string; [key: string]: unknown }[]>,
   lbAT: { M: Record<string, unknown>; F: Record<string, unknown> },
   atMet: Record<string, PlayerProfile>,
   settersWithImpact: SetterProfile[],
+  cMet?: Record<string, SkillData>,
 ) => {
   try {
     if (!data || !data.length) return null;
-    const qualifiedathletes = data
+    const qualifiedAthletes = data
       .filter((p) => !isPlaceholderPlayer(p.name) && (p.challenges || 0) >= 3)
       .map((p) => {
+        const performances = atPerfs[p.pKey] || [];
+        const uniqueCities = new Set<string>();
+        const uniqueCountries = new Set<string>();
+        performances.forEach((run: Record<string, unknown>) => {
+          const skillKey = String(run.label || run.name || run.challenge || "").toUpperCase();
+          const skillMeta = (cMet && skillKey && cMet[skillKey]) || {};
+          const city = String(run.city || skillMeta.city || "").trim().toUpperCase();
+          const country = String(run.country || skillMeta.country || "").trim().toUpperCase();
+          if (city && city !== "UNKNOWN" && city !== "N/A" && city !== "NONE") {
+            uniqueCities.add(city);
+          }
+          if (country && country !== "UNKNOWN" && country !== "N/A" && country !== "NONE") {
+            uniqueCountries.add(country);
+          }
+        });
+
         return {
           ...p,
+          cities: uniqueCities.size,
+          countries: uniqueCountries.size,
         };
       });
     return {
       topStats: {
-        rating: [...qualifiedathletes]
+        rating: [...qualifiedAthletes]
+          .filter((a) => (a.rating || 0) > 0)
           .sort((a: any, b: any) => {
             if (Math.abs((b.rating || 0) - (a.rating || 0)) > 0.000001) {
               return (b.rating || 0) - (a.rating || 0);
@@ -830,25 +858,39 @@ export const calculateWofStats = (
             }
             return (a.latestRunDate?.getTime() || Infinity) - (b.latestRunDate?.getTime() || Infinity);
           })
-          .slice(0, 10),
-        pts: [...qualifiedathletes]
-          .sort((a: any, b: any) => (b.pts || 0) - (a.pts || 0))
-          .slice(0, 10),
-        sends: [...qualifiedathletes]
+          .slice(0, 20),
+        pts: [...qualifiedAthletes]
+          .filter((a) => (a.pts || 0) > 0)
+          .sort((a: any, b: any) => (b.pts || 0) - (a.pts || 0) || b.sends - a.sends)
+          .slice(0, 20),
+        sends: [...qualifiedAthletes]
+          .filter((a) => (a.sends || 0) > 0)
           .sort((a, b) => b.sends - a.sends)
-          .slice(0, 10),
-        firstSends: [...qualifiedathletes]
-          .sort((a, b) => (b.firstSends || 0) - (a.firstSends || 0))
-          .slice(0, 10),
+          .slice(0, 20),
+        firstSends: [...qualifiedAthletes]
+          .filter((a) => (a.firstSends || 0) > 0)
+          .sort((a, b) => (b.firstSends || 0) - (a.firstSends || 0) || b.sends - a.sends)
+          .slice(0, 20),
+        cities: [...qualifiedAthletes]
+          .filter((a) => (a.cities || 0) > 0)
+          .sort((a, b) => (b.cities || 0) - (a.cities || 0) || (b.challenges || 0) - (a.challenges || 0) || b.sends - a.sends)
+          .slice(0, 20),
+        countries: [...qualifiedAthletes]
+          .filter((a) => (a.countries || 0) > 0)
+          .sort((a, b) => (b.countries || 0) - (a.countries || 0) || (b.challenges || 0) - (a.challenges || 0) || b.sends - a.sends)
+          .slice(0, 20),
         impact: [...(settersWithImpact || [])]
+          .filter((a) => (a.impact || 0) > 0)
           .sort((a, b) => b.impact - a.impact)
-          .slice(0, 10),
+          .slice(0, 20),
         sets: [...(settersWithImpact || [])]
+          .filter((a) => (a.sets || 0) > 0)
           .sort((a, b) => b.sets - a.sets)
-          .slice(0, 10),
-        contributionScore: [...qualifiedathletes]
-          .sort((a, b) => b.contributionScore - a.contributionScore)
-          .slice(0, 10),
+          .slice(0, 20),
+        contributionScore: [...qualifiedAthletes]
+          .filter((a) => (a.contributionScore || 0) > 0)
+          .sort((a, b) => (b.contributionScore || 0) - (a.contributionScore || 0))
+          .slice(0, 20),
       },
     };
   } catch (e) {
