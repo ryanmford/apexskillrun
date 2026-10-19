@@ -520,11 +520,11 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
         ) {
           aggregated[normName].location = item.location;
         }
-        let playerPts = p.pts || p.contributionScore || 0;
-        if ((!playerPts || playerPts === 0)) {
+        let playerPts = p.pts || 0;
+        if (!playerPts || playerPts === 0) {
           const perfs = mode === "2026" ? processed.season26Performances?.[pKey] : (isAllTime ? processed.allTimePerformances?.[pKey] : processed.openPerformances?.[pKey]);
           if (perfs) {
-            playerPts = perfs.reduce((sum: number, perf: { points?: number }) => sum + (perf.points || 0), 0);
+            playerPts = perfs.reduce((sum: number, perf: { skillPoints?: number; points?: number }) => sum + (perf.skillPoints || 0), 0);
           }
         }
         

@@ -54,8 +54,6 @@ export const ASRRankList = ({
 }: ASRRankListProps) => {
   const theme = useContext(ThemeContext);
   const modalScrollRef = useContext(ModalScrollContext);
-  const activeScrollRef =
-    scrollElementRef || (modalScrollRef.current ? modalScrollRef : null);
   const { atMet = {}, cMet = {} } = dataContext;
 
   const { finalAthletes, listRenderKey } = React.useMemo(() => {
@@ -91,26 +89,146 @@ export const ASRRankList = ({
 
   const [visibleCount, setVisibleCount] = React.useState(20);
   const loaderRef = React.useRef<HTMLDivElement>(null);
+  const isBusyRef = React.useRef(false);
 
   React.useEffect(() => {
     setVisibleCount(20);
+    isBusyRef.current = false;
   }, [finalAthletes]);
 
+  const loadMore = React.useCallback(() => {
+    if (isBusyRef.current) return;
+    setVisibleCount((prev) => {
+      if (prev >= finalAthletes.length) return prev;
+      isBusyRef.current = true;
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          isBusyRef.current = false;
+        }, 50);
+      });
+      return Math.min(prev + 20, finalAthletes.length);
+    });
+  }, [finalAthletes.length]);
+
   React.useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + 20, finalAthletes.length));
+    if (visibleCount >= finalAthletes.length) return;
+
+    // Dynamically resolve the scroll container from refs or DOM hierarchy
+    const getScrollContainer = (): HTMLElement | Window => {
+      if (scrollElementRef?.current) return scrollElementRef.current;
+      if (modalScrollRef?.current) return modalScrollRef.current;
+      let el: HTMLElement | null = loaderRef.current;
+      while (
+        el &&
+        el.parentElement &&
+        el !== document.body &&
+        el !== document.documentElement
+      ) {
+        el = el.parentElement;
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        if (
+          overflowY === "auto" ||
+          overflowY === "scroll" ||
+          overflowY === "overlay"
+        ) {
+          return el;
         }
-      },
-      {
-        root: activeScrollRef ? activeScrollRef.current : null,
-        rootMargin: "200px",
-      },
-    );
-    if (loaderRef.current) observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, [finalAthletes.length, activeScrollRef]);
+      }
+      return window;
+    };
+
+    const container = getScrollContainer();
+    const isElement = container instanceof HTMLElement;
+
+    const checkVisibility = () => {
+      if (!loaderRef.current || isBusyRef.current) return;
+      const loaderRect = loaderRef.current.getBoundingClientRect();
+
+      const isNear = isElement
+        ? (() => {
+            const containerRect = (container as HTMLElement).getBoundingClientRect();
+            return (
+              loaderRect.top <= containerRect.bottom + 350 &&
+              loaderRect.bottom >= containerRect.top - 100
+            );
+          })()
+        : loaderRect.top <= window.innerHeight + 350 &&
+          loaderRect.bottom >= -100;
+
+      if (isNear) {
+        loadMore();
+      }
+    };
+
+    // 1. Setup IntersectionObserver
+    let observer: IntersectionObserver | null = null;
+    try {
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) {
+            loadMore();
+          }
+        },
+        {
+          root: isElement ? (container as HTMLElement) : null,
+          rootMargin: "350px 0px 350px 0px",
+          threshold: 0,
+        },
+      );
+      if (loaderRef.current) {
+        observer.observe(loaderRef.current);
+      }
+    } catch {
+      // Fallback to scroll/timer if IntersectionObserver fails
+    }
+
+    // 2. Setup scroll & touch event listeners for immediate responsiveness during rapid scrolling
+    let rafId: number | null = null;
+    const onScrollOrTouch = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        checkVisibility();
+      });
+    };
+
+    container.addEventListener("scroll", onScrollOrTouch, { passive: true });
+    if (isElement) {
+      window.addEventListener("scroll", onScrollOrTouch, { passive: true });
+    }
+    window.addEventListener("resize", onScrollOrTouch, { passive: true });
+    container.addEventListener("touchmove", onScrollOrTouch, { passive: true });
+    container.addEventListener("touchend", onScrollOrTouch, { passive: true });
+
+    // 3. Initial check right after mount / visibleCount increment
+    checkVisibility();
+
+    // 4. Stalled-recovery interval: guarantees that even if inertia flicking coalesced events,
+    // visible records are never stuck for more than 400ms
+    const recoveryInterval = setInterval(() => {
+      checkVisibility();
+    }, 400);
+
+    return () => {
+      if (observer) observer.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      clearInterval(recoveryInterval);
+      container.removeEventListener("scroll", onScrollOrTouch);
+      if (isElement) {
+        window.removeEventListener("scroll", onScrollOrTouch);
+      }
+      window.removeEventListener("resize", onScrollOrTouch);
+      container.removeEventListener("touchmove", onScrollOrTouch);
+      container.removeEventListener("touchend", onScrollOrTouch);
+    };
+  }, [
+    finalAthletes.length,
+    visibleCount,
+    loadMore,
+    modalScrollRef,
+    scrollElementRef,
+  ]);
 
   return (
     <div className={cn("space-y-6 text-left overflow-visible", className)}>
@@ -158,7 +276,7 @@ export const ASRRankList = ({
                 time !== undefined
               ) {
                 stats.push({
-                  value: (cleanNumeric(points) || 0).toFixed(2),
+                  value: Math.round(cleanNumeric(points) || 0).toLocaleString(),
                   label: "PTS",
                 });
               } else {
@@ -174,7 +292,9 @@ export const ASRRankList = ({
                   "IMPACT",
                   "SETS",
                   "RANK",
-                  "SENDS", "PTS",
+                  "SENDS",
+                  "PTS",
+                  "POINTS",
                 ].includes(String(valueLabel || "").toUpperCase());
                 stats.push({
                   value:
@@ -302,9 +422,14 @@ export const ASRRankList = ({
             {visibleCount < finalAthletes.length && (
               <div
                 ref={loaderRef}
-                className="h-20 w-full flex items-center justify-center"
+                onClick={loadMore}
+                className="h-20 w-full flex flex-col items-center justify-center cursor-pointer select-none py-4 group active:scale-95 transition-transform"
+                role="button"
+                tabIndex={0}
+                aria-label="Load more records"
+                title="Tap to load more records"
               >
-                <div className="animate-pulse w-8 h-8 rounded-full border-2 text-zinc-500" />
+                <div className="w-8 h-8 rounded-full border-2 border-zinc-600/30 border-t-zinc-400 dark:border-zinc-700/40 dark:border-t-zinc-200 animate-spin" />
               </div>
             )}
           </div>

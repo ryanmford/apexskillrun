@@ -108,8 +108,8 @@ export const TeamDetails = React.memo(
             </span>
           }
           subtitle={
-            <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest mt-1">
-              <Globe size={12} />
+            <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest mt-1 w-full min-w-0">
+              <Globe size={12} className="shrink-0" />
               <span className="truncate">{formatLocation(tMeta || team) || "UNKNOWN LOC"}</span>
             </div>
           }
@@ -235,7 +235,7 @@ export const TeamDetails = React.memo(
 
               <div className="flex flex-col p-6 gap-10">
                 <div className="grid grid-cols-2 gap-4">
-                  <ASRStatCard label="POINTS" value={playerStats.points.toFixed(2)} />
+                  <ASRStatCard label="POINTS" value={Math.round(playerStats.points || 0)} />
                   <ASRStatCard label="SENDS" value={playerStats.sends} />
                 </div>
 
@@ -259,7 +259,7 @@ export const TeamDetails = React.memo(
           {contentTab === "setters" && (
             <InspectorTabContainer>
               <div className="grid grid-cols-2 gap-4">
-                <ASRStatCard label="IMPACT" value={setterStats.impact.toFixed(2)} />
+                <ASRStatCard label="IMPACT" value={Math.round(setterStats.impact || 0)} />
                 <ASRStatCard label="SETS" value={setterStats.sets} />
               </div>
 

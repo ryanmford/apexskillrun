@@ -232,8 +232,8 @@ export const PlayerDetails = React.memo(
             </span>
           }
           subtitle={
-            <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest mt-1">
-              <MapPin size={12} />
+            <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest mt-1 w-full min-w-0">
+              <MapPin size={12} className="shrink-0" />
               <span className="truncate">{formatLocation(meta || player)}</span>
             </div>
           }
@@ -322,7 +322,7 @@ export const PlayerDetails = React.memo(
                       glow: "",
                     },
                     { label: "RATING", value: stats.rating.toFixed(2) },
-                    { label: "POINTS", value: stats.pts.toFixed(2) },
+                    { label: "POINTS", value: Math.round(stats.pts || 0) },
                     { label: "SENDS", value: stats.sends },
                     { label: "1ST SENDS", value: stats.firstSends },
                   ].map((s, i) => (
