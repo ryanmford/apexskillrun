@@ -301,7 +301,7 @@ export const SkillDetails = React.memo(
 
     const handleFilterMapByTier = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (tierCfg.id === "all") return;
+      if (ratingInt <= 0) return;
       const nextParams = new URLSearchParams();
       const eventTypeParam = searchParams.get("eventType");
       if (eventTypeParam) nextParams.set("eventType", eventTypeParam);
@@ -383,7 +383,7 @@ export const SkillDetails = React.memo(
                 <MapPin size={12} className="shrink-0" />
                 <span className="truncate">{formatLocation(meta)}</span>
               </div>
-              {(ratingInt > 0 || lengthMeters > 0 || hasElev || meta.type) && (
+              {(ratingInt > 0 || lengthMeters > 0 || hasElev) && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                   {ratingInt > 0 && (
                     <button
@@ -421,18 +421,6 @@ export const SkillDetails = React.memo(
                       )}
                     >
                       {elevNum > 0 ? `+${elevNum.toFixed(2)}M` : `${elevNum.toFixed(2)}M`}
-                    </span>
-                  )}
-                  {meta.type && (
-                    <span
-                      className={cn(
-                        "inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wider",
-                        theme === "dark"
-                          ? "bg-white/[0.04] border-white/10 text-zinc-400"
-                          : "bg-black/[0.04] border-black/10 text-zinc-600"
-                      )}
-                    >
-                      {meta.type}
                     </span>
                   )}
                 </div>

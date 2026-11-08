@@ -802,7 +802,7 @@ export const parseSkillDifficulty = (diff: string): string => {
   return diff;
 };
 
-export type SkillRatingTierId = "all" | "1-25" | "26-50" | "51-75" | "76-100";
+export type SkillRatingTierId = "1-20" | "21-40" | "41-60" | "61-80" | "81-100";
 
 export interface SkillRatingTierConfig {
   id: SkillRatingTierId;
@@ -820,28 +820,29 @@ export interface SkillRatingTierConfig {
   pinHex: string;
 }
 
+export const UNRATED_SKILL_TIER: SkillRatingTierConfig = {
+  id: "1-20",
+  label: "UNRATED",
+  tierName: "UNRATED",
+  min: 0,
+  max: 100,
+  dotCls: "bg-zinc-400",
+  textDarkCls: "text-white",
+  textLightCls: "text-zinc-900",
+  badgeDarkCls: "bg-zinc-800 text-zinc-200 border-zinc-700",
+  badgeLightCls: "bg-zinc-100 text-zinc-800 border-zinc-300",
+  activePillDarkCls: "bg-white text-black border-white shadow-[0_0_12px_rgba(255,255,255,0.25)]",
+  activePillLightCls: "bg-zinc-900 text-white border-zinc-900 shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+  pinHex: "#a1a1aa",
+};
+
 export const SKILL_RATING_TIERS: SkillRatingTierConfig[] = [
   {
-    id: "all",
-    label: "ALL",
-    tierName: "ALL",
-    min: 0,
-    max: 100,
-    dotCls: "bg-zinc-400",
-    textDarkCls: "text-white",
-    textLightCls: "text-zinc-900",
-    badgeDarkCls: "bg-zinc-800 text-zinc-200 border-zinc-700",
-    badgeLightCls: "bg-zinc-100 text-zinc-800 border-zinc-300",
-    activePillDarkCls: "bg-white text-black border-white shadow-[0_0_12px_rgba(255,255,255,0.25)]",
-    activePillLightCls: "bg-zinc-900 text-white border-zinc-900 shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
-    pinHex: "#a1a1aa",
-  },
-  {
-    id: "1-25",
-    label: "1–25",
+    id: "1-20",
+    label: "1–20",
     tierName: "ENTRY",
     min: 1,
-    max: 25,
+    max: 20,
     dotCls: "bg-emerald-400",
     textDarkCls: "text-emerald-400",
     textLightCls: "text-emerald-600",
@@ -852,11 +853,11 @@ export const SKILL_RATING_TIERS: SkillRatingTierConfig[] = [
     pinHex: "#10b981",
   },
   {
-    id: "26-50",
-    label: "26–50",
+    id: "21-40",
+    label: "21–40",
     tierName: "CORE",
-    min: 26,
-    max: 50,
+    min: 21,
+    max: 40,
     dotCls: "bg-sky-400",
     textDarkCls: "text-sky-400",
     textLightCls: "text-sky-600",
@@ -867,11 +868,11 @@ export const SKILL_RATING_TIERS: SkillRatingTierConfig[] = [
     pinHex: "#0ea5e9",
   },
   {
-    id: "51-75",
-    label: "51–75",
-    tierName: "HARD",
-    min: 51,
-    max: 75,
+    id: "41-60",
+    label: "41–60",
+    tierName: "SOLID",
+    min: 41,
+    max: 60,
     dotCls: "bg-amber-400",
     textDarkCls: "text-amber-400",
     textLightCls: "text-amber-600",
@@ -882,11 +883,11 @@ export const SKILL_RATING_TIERS: SkillRatingTierConfig[] = [
     pinHex: "#f59e0b",
   },
   {
-    id: "76-100",
-    label: "76–100",
-    tierName: "APEX",
-    min: 76,
-    max: 100,
+    id: "61-80",
+    label: "61–80",
+    tierName: "HARD",
+    min: 61,
+    max: 80,
     dotCls: "bg-rose-500",
     textDarkCls: "text-rose-400",
     textLightCls: "text-rose-600",
@@ -895,6 +896,21 @@ export const SKILL_RATING_TIERS: SkillRatingTierConfig[] = [
     activePillDarkCls: "bg-rose-500/20 text-rose-300 border-rose-400/70 shadow-[0_0_12px_rgba(244,63,94,0.25)]",
     activePillLightCls: "bg-rose-600 text-white border-rose-600 shadow-[0_2px_8px_rgba(244,63,94,0.3)]",
     pinHex: "#f43f5e",
+  },
+  {
+    id: "81-100",
+    label: "81–100",
+    tierName: "APEX",
+    min: 81,
+    max: 100,
+    dotCls: "bg-purple-500",
+    textDarkCls: "text-purple-400",
+    textLightCls: "text-purple-600",
+    badgeDarkCls: "bg-purple-500/15 text-purple-300 border-purple-500/35",
+    badgeLightCls: "bg-purple-500/10 text-purple-700 border-purple-500/30",
+    activePillDarkCls: "bg-purple-500/20 text-purple-300 border-purple-400/70 shadow-[0_0_12px_rgba(168,85,247,0.25)]",
+    activePillLightCls: "bg-purple-600 text-white border-purple-600 shadow-[0_2px_8px_rgba(168,85,247,0.3)]",
+    pinHex: "#a855f7",
   },
 ];
 
@@ -912,10 +928,11 @@ export const getSkillRating = (skill?: { points?: number | string; difficulty?: 
 
 export const getSkillTierConfig = (rating: number): SkillRatingTierConfig => {
   const r = Math.round(rating);
-  if (r <= 0) return SKILL_RATING_TIERS[0];
-  if (r <= 25) return SKILL_RATING_TIERS[1];
-  if (r <= 50) return SKILL_RATING_TIERS[2];
-  if (r <= 75) return SKILL_RATING_TIERS[3];
+  if (r <= 0) return UNRATED_SKILL_TIER;
+  if (r <= 20) return SKILL_RATING_TIERS[0];
+  if (r <= 40) return SKILL_RATING_TIERS[1];
+  if (r <= 60) return SKILL_RATING_TIERS[2];
+  if (r <= 80) return SKILL_RATING_TIERS[3];
   return SKILL_RATING_TIERS[4];
 };
 
@@ -943,11 +960,10 @@ export const parseRatingRangesList = (param: string | null | undefined): { min: 
 };
 
 export const toggleRatingTierParam = (currentParam: string | null | undefined, clickedTierId: SkillRatingTierId): string => {
-  if (clickedTierId === "all") return "all";
-  const allNonAllIds: SkillRatingTierId[] = ["1-25", "26-50", "51-75", "76-100"];
+  const allTierIds: SkillRatingTierId[] = ["1-20", "21-40", "41-60", "61-80", "81-100"];
   const currentParts = (currentParam && currentParam !== "all" ? currentParam.split(",") : [])
     .map(s => s.trim())
-    .filter((s): s is SkillRatingTierId => allNonAllIds.includes(s as SkillRatingTierId));
+    .filter((s): s is SkillRatingTierId => allTierIds.includes(s as SkillRatingTierId));
 
   const nextSet = new Set<SkillRatingTierId>(currentParts);
   if (nextSet.has(clickedTierId)) {
@@ -956,12 +972,12 @@ export const toggleRatingTierParam = (currentParam: string | null | undefined, c
     nextSet.add(clickedTierId);
   }
 
-  // If 0 selected or all 4 tiers selected, return "all"
-  if (nextSet.size === 0 || nextSet.size === allNonAllIds.length) {
+  // If 0 selected or all 5 tiers selected, return "all"
+  if (nextSet.size === 0 || nextSet.size === allTierIds.length) {
     return "all";
   }
 
-  return allNonAllIds.filter(id => nextSet.has(id)).join(",");
+  return allTierIds.filter(id => nextSet.has(id)).join(",");
 };
 
 export const parseSearchQueryWithRating = (rawQuery: string): {

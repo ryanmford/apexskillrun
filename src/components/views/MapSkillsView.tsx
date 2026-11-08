@@ -146,9 +146,11 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         label: (
           <span className="inline-flex items-center gap-0.5">
             <span>LVL</span>
-            <span className="text-[9px] leading-none">
-              {sortMode === "easiest" ? "↑" : sortMode === "hardest" ? "↓" : "↕"}
-            </span>
+            {isLvlSort && (
+              <span className="text-[9px] leading-none">
+                {sortMode === "easiest" ? "↑" : "↓"}
+              </span>
+            )}
           </span>
         ),
         key: "points",
@@ -175,9 +177,11 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         label: (
           <span className="inline-flex items-center gap-0.5">
             <span>SENDS</span>
-            <span className="text-[9px] leading-none">
-              {sortMode === "sends_desc" ? "↓" : sortMode === "sends_asc" ? "↑" : "↕"}
-            </span>
+            {isSendsSort && (
+              <span className="text-[9px] leading-none">
+                {sortMode === "sends_desc" ? "↓" : "↑"}
+              </span>
+            )}
           </span>
         ),
         key: runKey,
@@ -266,21 +270,21 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   // Compute live viewport counts per tier so empty tiers automatically dim
   const viewportTierCounts = useMemo(() => {
     const counts: Record<SkillRatingTierId, number> = {
-      all: 0,
-      "1-25": 0,
-      "26-50": 0,
-      "51-75": 0,
-      "76-100": 0,
+      "1-20": 0,
+      "21-40": 0,
+      "41-60": 0,
+      "61-80": 0,
+      "81-100": 0,
     };
     textFilteredData.forEach((item: any) => {
       if (!item || item.isDivider) return;
       if (!isWithinBounds(item, visibleBounds)) return;
-      counts.all++;
       const r = Math.round(getSkillRating(item));
-      if (r >= 1 && r <= 25) counts["1-25"]++;
-      else if (r >= 26 && r <= 50) counts["26-50"]++;
-      else if (r >= 51 && r <= 75) counts["51-75"]++;
-      else if (r >= 76) counts["76-100"]++;
+      if (r >= 1 && r <= 20) counts["1-20"]++;
+      else if (r >= 21 && r <= 40) counts["21-40"]++;
+      else if (r >= 41 && r <= 60) counts["41-60"]++;
+      else if (r >= 61 && r <= 80) counts["61-80"]++;
+      else if (r >= 81) counts["81-100"]++;
     });
     return counts;
   }, [textFilteredData, visibleBounds, isWithinBounds]);
@@ -412,12 +416,9 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         {/* Slim Single-Line Difficulty Tier Pills (Multi-Select Capable) */}
         <div className="grid grid-cols-5 gap-1.5 w-full">
           {SKILL_RATING_TIERS.map((tier) => {
-            const isActive =
-              tier.id === "all"
-                ? activeRatingRanges.length === 0
-                : activeRatingRanges.some(
-                    r => r.min <= tier.min && r.max >= tier.max
-                  );
+            const isActive = activeRatingRanges.some(
+              r => r.min <= tier.min && r.max >= tier.max
+            );
             const count = viewportTierCounts[tier.id];
 
             return (
@@ -437,14 +438,12 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
                   count === 0 && !isActive && "opacity-30"
                 )}
               >
-                {tier.id !== "all" && (
-                  <span
-                    className={cn(
-                      "w-1.5 h-1.5 rounded-full shrink-0",
-                      isActive && !isDark ? "bg-white" : tier.dotCls
-                    )}
-                  />
-                )}
+                <span
+                  className={cn(
+                    "w-1.5 h-1.5 rounded-full shrink-0",
+                    isActive && !isDark ? "bg-white" : tier.dotCls
+                  )}
+                />
                 <span className="text-[10px] sm:text-[11px] font-mono font-black tracking-tighter uppercase leading-none">
                   {tier.label}
                 </span>
