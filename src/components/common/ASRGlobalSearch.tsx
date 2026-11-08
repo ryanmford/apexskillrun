@@ -48,33 +48,8 @@ export const ASRGlobalSearch = React.memo(({ theme }: { theme: "light" | "dark" 
 
   const debouncedSearch = useDebounce(search, 200);
 
-  const searchResults = useMemo(() => {
-    if (debouncedSearch.length < 2) return null;
-    const q = normalizeForSearch(debouncedSearch);
-    const searchTerms = q.split(/[\s,]+/).filter(Boolean);
-    
-    const players = [...playerList_M_AT, ...playerList_F_AT].filter(p => {
-      const key = normalizeForSearch(`${p.name} ${p.igHandle} ${p.teams?.map(t => t.name).join(" ")} ${p.location} ${p.homeGym}`);
-      return searchTerms.every(term => key.includes(term));
-    }).sort((a, b) => (b.sends || 0) - (a.sends || 0));
-    const challenges = masterSkillList.filter(c => {
-      const key = normalizeForSearch(`${c.name} ${c.city} ${c.stateProv} ${c.country}`);
-      return searchTerms.every(term => key.includes(term));
-    }).sort((a, b) => (b.totalAllTimeRuns || 0) - (a.totalAllTimeRuns || 0));
-    const gymsArr = ((teamsAggregated as any)?.gyms?.allTime || []);
-    const teamsArr = ((teamsAggregated as any)?.teams?.allTime || []);
-
-    const matchedGyms = gymsArr.filter((t: SearchResultTeam) => {
-      const name = normalizeForSearch(t.name);
-      return searchTerms.every(term => name.includes(term));
-    }).sort((a, b) => (b.pts || 0) - (a.pts || 0));
-    
-    const matchedTeams = teamsArr.filter((t: SearchResultTeam) => {
-      const name = normalizeForSearch(t.name);
-      return searchTerms.every(term => name.includes(term));
-    }).sort((a, b) => (b.pts || 0) - (a.pts || 0));
-
-    const locationMap = new Map<string, SearchResultLocation>();
+  const locationsList = useMemo(() => {
+    const locationMap = new Map<string, SearchResultLocation & { searchKey: string }>();
     masterSkillList.forEach(c => {
       if (!c.isDivider && (c.city || c.stateProv || c.country)) {
         const city = c.city || "";
@@ -89,24 +64,56 @@ export const ASRGlobalSearch = React.memo(({ theme }: { theme: "light" | "dark" 
             stateProv, 
             country, 
             flag: c.flag || "📍",
-            skillCount: 1
+            skillCount: 1,
+            searchKey: normalizeForSearch(locName),
           });
         } else {
           locationMap.get(locKey)!.skillCount!++;
         }
       }
     });
+    return Array.from(locationMap.values());
+  }, [masterSkillList]);
 
-    const locations = Array.from(locationMap.values()).filter(l => {
-      const name = normalizeForSearch(l.name);
-      return searchTerms.every(term => name.includes(term));
+  const searchResults = useMemo(() => {
+    if (debouncedSearch.length < 2) return null;
+    const q = normalizeForSearch(debouncedSearch);
+    const searchTerms = q.split(/[\s,]+/).filter(Boolean);
+    
+    const players = [...playerList_M_AT, ...playerList_F_AT].filter((p: any) => {
+      if (!p || p.isDivider) return false;
+      const key = p.searchKey || normalizeForSearch(`${p.name} ${p.igHandle} ${p.teams?.map((t: any) => t.name).join(" ")} ${p.location} ${p.homeGym}`);
+      return searchTerms.every(term => key.includes(term));
+    }).sort((a, b) => (b.sends || 0) - (a.sends || 0));
+
+    const challenges = masterSkillList.filter((c: any) => {
+      if (!c || c.isDivider) return false;
+      const key = c.searchKey || normalizeForSearch(`${c.name} ${c.city} ${c.stateProv} ${c.country}`);
+      return searchTerms.every(term => key.includes(term));
+    }).sort((a, b) => (b.totalAllTimeRuns || 0) - (a.totalAllTimeRuns || 0));
+
+    const gymsArr = ((teamsAggregated as any)?.gyms?.allTime || []);
+    const teamsArr = ((teamsAggregated as any)?.teams?.allTime || []);
+
+    const matchedGyms = gymsArr.filter((t: SearchResultTeam & { searchKey?: string }) => {
+      const key = t.searchKey || normalizeForSearch(t.name);
+      return searchTerms.every(term => key.includes(term));
+    }).sort((a: SearchResultTeam, b: SearchResultTeam) => (b.pts || 0) - (a.pts || 0));
+    
+    const matchedTeams = teamsArr.filter((t: SearchResultTeam & { searchKey?: string }) => {
+      const key = t.searchKey || normalizeForSearch(t.name);
+      return searchTerms.every(term => key.includes(term));
+    }).sort((a: SearchResultTeam, b: SearchResultTeam) => (b.pts || 0) - (a.pts || 0));
+
+    const locations = locationsList.filter(l => {
+      return searchTerms.every(term => l.searchKey.includes(term));
     }).sort((a, b) => (b.skillCount || 0) - (a.skillCount || 0));
 
     const isGeoSearch = locations.length > 0 && locations.some(l => {
       const nCity = normalizeForSearch(l.city);
       const nState = normalizeForSearch(l.stateProv);
       const nCountry = normalizeForSearch(l.country);
-      return nCity === q || nState === q || nCountry === q || normalizeForSearch(l.name) === q;
+      return nCity === q || nState === q || nCountry === q || l.searchKey === q;
     });
 
     return { 
@@ -116,7 +123,7 @@ export const ASRGlobalSearch = React.memo(({ theme }: { theme: "light" | "dark" 
       teams: isGeoSearch ? [] : matchedTeams, 
       locations 
     };
-  }, [debouncedSearch, playerList_M_AT, playerList_F_AT, masterSkillList, teamsAggregated]);
+  }, [debouncedSearch, playerList_M_AT, playerList_F_AT, masterSkillList, teamsAggregated, locationsList]);
 
   const allSearchResults = useMemo(() => {
     if (!searchResults) return [];

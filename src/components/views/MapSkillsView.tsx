@@ -157,19 +157,17 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         onHeaderClick: handleLvlHeaderClick,
         getValue: (c: SkillData) => {
           const rating = Math.round(getSkillRating(c));
+          return rating <= 0 ? "--" : rating;
+        },
+        getValueClassName: (c: SkillData) => {
+          const rating = Math.round(getSkillRating(c));
           if (rating <= 0) {
-            return <span className="opacity-30 text-xs font-mono">--</span>;
+            return "opacity-30 !text-xs font-mono";
           }
           const tier = getSkillTierConfig(rating);
-          return (
-            <span
-              className={cn(
-                "font-mono font-black text-[14px] sm:text-[15px] tabular-nums tracking-tight",
-                theme === "dark" ? tier.textDarkCls : tier.textLightCls
-              )}
-            >
-              {rating}
-            </span>
+          return cn(
+            "font-mono font-black !text-[14px] sm:!text-[15px] tabular-nums tracking-tight",
+            theme === "dark" ? tier.textDarkCls : tier.textLightCls
           );
         },
       },
@@ -523,6 +521,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
               middleLabel={headerMiddleLabel}
               columns={columns}
               showVideoColumn={hasVideosInView}
+              enableHoverSync={true}
             />
           </ErrorBoundary>
         )}

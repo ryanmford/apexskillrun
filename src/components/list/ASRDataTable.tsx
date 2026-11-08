@@ -18,6 +18,8 @@ interface ColumnDef<T> {
   onHeaderClick?: () => void;
   isActiveSort?: boolean;
   getValue?: (item: T) => React.ReactNode;
+  getSubValue?: (item: T) => React.ReactNode;
+  getValueClassName?: (item: T) => string;
 }
 
 interface ASRDataTableProps<T = Record<string, unknown>> {
@@ -35,6 +37,7 @@ interface ASRDataTableProps<T = Record<string, unknown>> {
  hideSubtitle?: boolean;
  middleLabel?: React.ReactNode;
  showVideoColumn?: boolean;
+ enableHoverSync?: boolean;
 }
 
 interface MemoizedVirtualRowProps<T> {
@@ -70,6 +73,8 @@ const MemoizedVirtualRow = React.memo(({
     if (!item) return [];
     return statColumns.map((c) => ({
       value: typeof c.getValue === "function" ? c.getValue(item) : item[c.key as keyof typeof item],
+      subValue: typeof c.getSubValue === "function" ? c.getSubValue(item) : undefined,
+      valueClassName: typeof c.getValueClassName === "function" ? c.getValueClassName(item) : undefined,
       color: c.color,
       label: c.label,
     }));
@@ -78,6 +83,10 @@ const MemoizedVirtualRow = React.memo(({
   const handleClick = React.useCallback(() => {
     if (onItemClick) onItemClick(item);
   }, [onItemClick, item]);
+
+  const handleHover = React.useCallback((isHovering: boolean) => {
+    if (onItemHover) onItemHover(item, isHovering);
+  }, [onItemHover, item]);
 
   if (!item) return null;
 
@@ -128,7 +137,7 @@ const MemoizedVirtualRow = React.memo(({
         shouldFade={item.shouldFade}
         badgeContent={item.badgeContent}
         onClick={handleClick}
-        onHover={(isHovering) => onItemHover && onItemHover(item, isHovering)}
+        onHover={handleHover}
         isHighlighted={!!(activeSkillId && (item.id === activeSkillId || item.pKey === activeSkillId || item.name === activeSkillId))}
         showVideoIcon={showVideoColumn}
       />
@@ -152,21 +161,24 @@ export const ASRDataTable = React.memo(
  middleLabel = "PLAYER / DATA",
  showVideoColumn = false,
  scrollElementRef,
+ enableHoverSync = false,
  }, ref) => {
  const theme = useContext(ThemeContext);
  const hasError = useDataStore(s => s.hasError);
  const { prefetchEntity } = useAppNavigation();
- const activeSkillId = useAppStore(s => s.activeSkillId);
+ const activeSkillId = useAppStore(s => enableHoverSync ? s.activeSkillId : null);
  const setActiveSkillId = useAppStore(s => s.setActiveSkillId);
 
  const handleItemHover = React.useCallback((item: Record<string, unknown>, isHovering: boolean) => {
    if (isHovering) {
      prefetchEntity();
-     setActiveSkillId((item?.id as string) || (item?.pKey as string) || (item?.name as string) || null);
-   } else {
+     if (enableHoverSync) {
+       setActiveSkillId((item?.id as string) || (item?.pKey as string) || (item?.name as string) || null);
+     }
+   } else if (enableHoverSync) {
      setActiveSkillId(null);
    }
- }, [prefetchEntity, setActiveSkillId]);
+ }, [prefetchEntity, setActiveSkillId, enableHoverSync]);
  
  const estimateSize = React.useCallback(() => {
    return viewType === "card" 

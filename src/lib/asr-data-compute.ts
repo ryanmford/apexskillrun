@@ -165,7 +165,6 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       ...Object.keys(cMet || {}),
       ...Object.keys(lbAT?.M || {}),
       ...Object.keys(lbAT?.F || {}),
-      ...Object.keys(cMet || {}),
     ]),
   ).filter(Boolean);
   

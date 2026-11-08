@@ -17,6 +17,8 @@ import {
 } from "../lib/asr-utils";
 import { SkillData, SetterProfile, TeamProfile, PlayerProfile } from "../types";
 
+let hasPrefetchedInspector = false;
+
 export const useURLState = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -73,7 +75,9 @@ export const useAppNavigation = () => {
   }, [navigate]);
 
   const prefetchEntity = useCallback(() => {
-    // Zero-Latency Hover Prefetching: Eagerly load the inspector chunks
+    if (hasPrefetchedInspector) return;
+    hasPrefetchedInspector = true;
+    // Zero-Latency Hover Prefetching: Eagerly load the inspector chunks once per session
     import("../components/inspector/InspectorBody").catch(() => {});
     import("../components/inspector/PlayerDetails").catch(() => {});
     import("../components/inspector/SkillDetails").catch(() => {});

@@ -35,6 +35,16 @@ export const useFetchASRData = () => {
             setData({ ...ssrData, isLoading: false });
             initialDataConsumed.current = true;
             restored = true;
+            // If SSR data was computed within the last 60s, skip immediate duplicate client fetch
+            if (ssrData.lastUpdated && Date.now() - Number(ssrData.lastUpdated) < 60000) {
+              setFetchStatus({ isLoading: false, isSyncing: false });
+              try {
+                localforage.setItem(CONFIG.SNAPSHOT_KEY, ssrData).catch(() => {});
+              } catch {
+                // ignore storage errors
+              }
+              return;
+            }
           }
         }
 

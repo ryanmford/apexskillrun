@@ -69,6 +69,9 @@ export const ASRBaseModal = React.memo(
       }
 
       // Restore or reset scroll for the new index
+      let rafId: number | null = null;
+      let timerId: ReturnType<typeof setTimeout> | null = null;
+
       if (scrollContainerRef.current) {
         const savedPos = historyScrollPositions.current[historyIndex];
         const targetY = savedPos !== undefined ? savedPos : 0;
@@ -82,11 +85,28 @@ export const ASRBaseModal = React.memo(
           }
         };
 
+        const cancelPendingScroll = () => {
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          if (timerId !== null) clearTimeout(timerId);
+        };
+
+        const el = scrollContainerRef.current;
+        el.addEventListener("wheel", cancelPendingScroll, { once: true, passive: true });
+        el.addEventListener("touchmove", cancelPendingScroll, { once: true, passive: true });
+
         attemptScroll();
-        requestAnimationFrame(() => {
+        rafId = requestAnimationFrame(() => {
           attemptScroll();
-          setTimeout(attemptScroll, 100);
+          timerId = setTimeout(attemptScroll, 80);
         });
+
+        prevIndexRef.current = historyIndex;
+
+        return () => {
+          cancelPendingScroll();
+          el.removeEventListener("wheel", cancelPendingScroll);
+          el.removeEventListener("touchmove", cancelPendingScroll);
+        };
       }
 
       prevIndexRef.current = historyIndex;

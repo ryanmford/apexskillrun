@@ -72,7 +72,7 @@ export const ASRListItem = React.memo(
    title?: React.ReactNode;
    subtitle?: React.ReactNode;
    variant?: "table" | "card" | "hero";
-   stats?: { value?: React.ReactNode }[];
+   stats?: { value?: React.ReactNode; subValue?: React.ReactNode; valueClassName?: string; label?: React.ReactNode }[];
    columns?: { isRank?: boolean; type?: string }[];
    videoUrl?: string | null;
    icon?: React.ReactNode;
@@ -117,8 +117,6 @@ export const ASRListItem = React.memo(
  role={onClick ? "button" : undefined} 
  onMouseEnter={() => onHover && onHover(true)} 
  onMouseLeave={() => onHover && onHover(false)}
- onTouchStart={() => onHover && onHover(true)}
- onTouchEnd={() => onHover && onHover(false)}
  tabIndex={onClick ? 0 : undefined}
  onKeyDown={(e) => {
  if (onClick && (e.key === "Enter" || e.key === " ")) {
@@ -160,7 +158,6 @@ export const ASRListItem = React.memo(
  <div
  className={cn(
  "flex items-center text-[11px] sm:text-[18px] lg:text-[24px] font-black uppercase leading-tight transition-colors max-w-full",
- onClick && !isUnclaimed ? "" : "",
  isUnclaimed
  ? theme === "dark"
  ? "text-zinc-300"
@@ -199,7 +196,7 @@ export const ASRListItem = React.memo(
  {subtitle}
  </div>
  </div>
- {(stats || []).map((s: { value?: React.ReactNode }, idx: number) => {
+ {(stats || []).map((s: { value?: React.ReactNode; subValue?: React.ReactNode; valueClassName?: string }, idx: number) => {
  const colDef = columns?.filter(
  (c: { isRank?: boolean; type?: string }) => !c.isRank && c.type !== "profile",
  )[idx];
@@ -215,7 +212,7 @@ export const ASRListItem = React.memo(
  idx === 0
  ? cn(
  "text-sm sm:text-[24px] lg:text-[32px] tracking-tight",
- s.value
+ s.value !== undefined && s.value !== null && s.value !== ""
  ? cn(accentColor, "")
  : "opacity-20",
  )
@@ -225,9 +222,19 @@ export const ASRListItem = React.memo(
  ? "text-white/60"
  : "text-zinc-500",
  ),
+ s.valueClassName,
  )}
  >
- {s.value || "--"}
+ {s.subValue !== undefined && s.subValue !== null ? (
+   <div className="flex flex-col items-end leading-none justify-center">
+     <span>{s.value ?? "--"}</span>
+     <span className="text-[9px] sm:text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1 sm:mt-1.5">
+       {s.subValue}
+     </span>
+   </div>
+ ) : (
+   s.value ?? "--"
+ )}
  </span>
  </div>
  );
@@ -267,16 +274,12 @@ export const ASRListItem = React.memo(
  );
  }
 
- // Use the prop passed from ASRRankList
-
  return (
  <ItemWrapper
  onClick={isUnclaimed ? undefined : onClick}
  role={onClick && !isUnclaimed ? "button" : undefined} 
  onMouseEnter={() => onHover && onHover(true)} 
  onMouseLeave={() => onHover && onHover(false)}
- onTouchStart={() => onHover && onHover(true)}
- onTouchEnd={() => onHover && onHover(false)}
  tabIndex={onClick && !isUnclaimed ? 0 : undefined}
  onKeyDown={(e) => {
  if (onClick && !isUnclaimed && (e.key === "Enter" || e.key === " ")) {
@@ -314,7 +317,7 @@ export const ASRListItem = React.memo(
  </div>
  ) : (
  <div className="w-6 sm:w-10 lg:w-12 shrink-0 flex items-center justify-center">
-                  {mapUrl ? (
+                   {mapUrl ? (
  <a
  href={mapUrl.startsWith('http') ? mapUrl : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapUrl)}`}
  target="_blank"
@@ -328,7 +331,7 @@ export const ASRListItem = React.memo(
  />
  </a>
  ) : (
- <div className="scale-100 sm:scale-125 lg:scale-150 origin-center"><ASRRankBadge rank={rank} isUnclaimed={isUnclaimed} /></div>
+ <div className="scale-100 sm:scale-125 lg:scale-150 origin-center"><ASRRankBadge rank={rank} /></div>
  )}
  </div>
  )}
@@ -343,7 +346,6 @@ export const ASRListItem = React.memo(
  className={cn(
  "flex items-center font-black uppercase whitespace-normal leading-tight transition-colors line-clamp-2",
  isCompact ? "text-[13px] sm:text-[14px]" : "text-[14px] sm:text-[18px] lg:text-[22px]",
- onClick && !isUnclaimed ? "" : "",
  isUnclaimed
  ? theme === "dark"
  ? "text-zinc-300"
@@ -394,7 +396,7 @@ export const ASRListItem = React.memo(
  </div>
  <div className="flex items-center pr-0 shrink-0 h-full">
  <div className={cn("flex items-center justify-end text-right h-full", isCompact ? "gap-2" : "gap-2 sm:gap-4")}>
- {(stats || []).map((s: { value?: React.ReactNode }, idx: number) => {
+ {(stats || []).map((s: { value?: React.ReactNode; subValue?: React.ReactNode; valueClassName?: string }, idx: number) => {
    const colDef = columns?.filter(
      (c: { isRank?: boolean; type?: string }) => !c.isRank && c.type !== "profile",
    )[idx];
@@ -407,7 +409,7 @@ export const ASRListItem = React.memo(
  idx === 0
  ? cn(
  isCompact ? "text-[15px] sm:text-[16px]" : "text-[16px] sm:text-[24px] lg:text-[28px] tracking-tight",
- s.value
+ s.value !== undefined && s.value !== null && s.value !== ""
  ? cn(accentColor, "")
  : "opacity-20",
  )
@@ -420,9 +422,19 @@ export const ASRListItem = React.memo(
  "text-zinc-500",
  isCompact ? "text-[12px] sm:text-[13px] font-bold" : "text-[12px] sm:text-[14px] lg:text-[18px] font-bold",
  ),
+ s.valueClassName,
  )}
  >
- {s.value || "--"}
+ {s.subValue !== undefined && s.subValue !== null ? (
+   <div className="flex flex-col items-end leading-none justify-center">
+     <span>{s.value ?? "--"}</span>
+     <span className="text-[9px] sm:text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1 sm:mt-1.5">
+       {s.subValue}
+     </span>
+   </div>
+ ) : (
+   s.value ?? "--"
+ )}
  </span>
  </div>
  );
@@ -492,6 +504,8 @@ export const ASRListItem = React.memo(
  // Check specific stats recursively rather than shallow checking the new stats array
  for (let i = 0; i < (prev.stats?.length || 0); i++) {
  if (prev.stats[i]?.value !== next.stats[i]?.value) return false;
+ if (prev.stats[i]?.subValue !== next.stats[i]?.subValue) return false;
+ if (prev.stats[i]?.valueClassName !== next.stats[i]?.valueClassName) return false;
  if (prev.stats[i]?.label !== next.stats[i]?.label) return false;
  }
 

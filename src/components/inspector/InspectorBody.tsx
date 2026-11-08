@@ -67,7 +67,6 @@ export const InspectorBody = React.memo(
     const { settersWithImpact, setterMet } = useSettersDerived();
     const { pRaw, playerLB_AT, playerLB_OP, playerLB_2026 } = useLeaderboards();
     const season26Data = useDataStore((s) => s.season26Data);
-    const lbSeason26 = useDataStore((s) => s.lbSeason26);
 
     const dataContext = React.useMemo(() => ({
       data: dataCore,
@@ -98,7 +97,7 @@ export const InspectorBody = React.memo(
       skillRecords_F_2026: skillRecords_F_2026,
     }), [
       dataCore, atPerfs, opPerfs, atMet, openData, cMet, 
-      playerLB_AT, playerLB_OP, playerLB_2026, lbSeason26, season26Data, setterMet, pRaw, 
+      playerLB_AT, playerLB_OP, playerLB_2026, season26Data, setterMet, pRaw, 
       settersWithImpact, atRawBest, opRawBest, lbAT, 
       lbOpen, teamsAggregated, skillRunsHistory, masterSkillList,
       skillRecords_M_AT, skillRecords_F_AT, skillRecords_M_OP, skillRecords_F_OP, skillRecords_M_2026, skillRecords_F_2026

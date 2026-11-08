@@ -50,14 +50,8 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
     {
       label: "RATING",
       key: "rating",
-      getValue: (p: PlayerProfile) => (
-        <div className="flex flex-col items-end leading-none justify-center">
-          <span>{(p.rating || 0).toFixed(2)}</span>
-          <span className="text-[9px] sm:text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1 sm:mt-1.5">
-            {Math.round(p.pts || 0)} PTS
-          </span>
-        </div>
-      ),
+      getValue: (p: PlayerProfile) => (p.rating || 0).toFixed(2),
+      getSubValue: (p: PlayerProfile) => `${(p.pts || 0).toFixed(2)} PTS`,
     },
   ], []);
 
@@ -65,7 +59,7 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
     {
       label: "POINTS",
       key: "pts",
-      getValue: (t: TeamProfile) => Math.round(t.pts || 0),
+      getValue: (t: TeamProfile) => (t.pts || 0).toFixed(2),
     },
   ], []);
 

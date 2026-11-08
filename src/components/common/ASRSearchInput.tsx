@@ -72,11 +72,9 @@ export const ASRSearchInput = React.memo(
 
     return (
       <div
-        aria-label="Clear search"
         className={cn("relative group", className)}
       >
         <div
-          aria-label="Clear search"
           className={cn(
             `relative flex items-center h-12 ${radiusClass} border transition-all duration-300 overflow-hidden`,
             theme === "dark"
@@ -101,7 +99,6 @@ export const ASRSearchInput = React.memo(
             />
             {/* Inner Surface Fill */}
             <div
-              aria-label="Clear search"
               className={cn(
                 `absolute inset-[1.5px] ${radiusClass} backdrop-blur-xl z-20`,
                 theme === "dark" ? "bg-zinc-950/90" : "bg-white",
@@ -110,7 +107,6 @@ export const ASRSearchInput = React.memo(
           </div>
 
           <div
-            aria-label="Clear search"
             className={cn(
               "absolute left-4 opacity-40 group-focus-within:opacity-100 transition-all z-30 pointer-events-none",
               theme === "dark"
@@ -155,7 +151,7 @@ export const ASRSearchInput = React.memo(
             }}
             style={{ scrollMarginBottom: "120px" }}
             placeholder={isFocused ? "" : placeholder}
-            aria-label="Clear search"
+            aria-label={placeholder || "Search"}
             className={cn(
               "w-full h-full pl-10 bg-transparent outline-none text-[16px] placeholder:text-[15px] sm:placeholder:text-[16px] font-black uppercase tracking-widest placeholder:opacity-40 placeholder:normal-case placeholder:font-medium placeholder:tracking-normal z-30 relative appearance-none",
               theme === "dark"
