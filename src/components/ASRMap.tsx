@@ -454,8 +454,9 @@ export const ASRMap = forwardRef(({
       ? `border: 2px solid ${tierCfg.pinHex}; box-shadow: 0 0 ${isActive ? '14px' : '6px'} ${tierCfg.pinHex}${isActive ? 'aa' : '55'};`
       : "";
 
+    const pinTextColor = currentIsDark ? "text-white" : "text-zinc-950";
     const innerContentHtml = hasRating
-      ? `<span class="relative z-20 font-mono font-black text-[10px] tracking-tighter leading-none select-none" style="color: ${isActive ? (currentIsDark ? '#ffffff' : '#09090b') : tierCfg.pinHex};">${ratingInt}</span>`
+      ? `<span class="relative z-20 font-mono font-black text-[10px] tracking-tighter leading-none select-none ${pinTextColor}">${ratingInt}</span>`
       : `<div class="relative z-20 w-1.5 h-1.5 rounded-full ${dotClasses} ${isActive ? 'scale-125' : 'group-hover:scale-125'} transition-all"></div>`;
 
     return L.divIcon({

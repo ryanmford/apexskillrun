@@ -526,7 +526,7 @@ export const HomeView = React.memo(() => {
           ) : (
             <div 
               className="w-full h-full object-cover opacity-60 bg-center bg-cover"
-              style={{ backgroundImage: "url('/apexskillschallenge.png')" }} 
+              style={{ backgroundImage: "url('/asr.png')" }} 
             />
           )}
           {/* subtle vignette */}

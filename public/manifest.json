@@ -4,13 +4,13 @@
   "description": "Global parkour leaderboards and challenge directory.",
   "icons": [
     {
-      "src": "/apexskillrun.png",
+      "src": "/asr.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/apexskillrun.png",
+      "src": "/asr.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
