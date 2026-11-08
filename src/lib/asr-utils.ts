@@ -801,3 +801,221 @@ export const parseSkillDifficulty = (diff: string): string => {
   
   return diff;
 };
+
+export type SkillRatingTierId = "all" | "1-25" | "26-50" | "51-75" | "76-100";
+
+export interface SkillRatingTierConfig {
+  id: SkillRatingTierId;
+  label: string;
+  tierName: string;
+  min: number;
+  max: number;
+  dotCls: string;
+  textDarkCls: string;
+  textLightCls: string;
+  badgeDarkCls: string;
+  badgeLightCls: string;
+  activePillDarkCls: string;
+  activePillLightCls: string;
+  pinHex: string;
+}
+
+export const SKILL_RATING_TIERS: SkillRatingTierConfig[] = [
+  {
+    id: "all",
+    label: "ALL",
+    tierName: "ALL",
+    min: 0,
+    max: 100,
+    dotCls: "bg-zinc-400",
+    textDarkCls: "text-white",
+    textLightCls: "text-zinc-900",
+    badgeDarkCls: "bg-zinc-800 text-zinc-200 border-zinc-700",
+    badgeLightCls: "bg-zinc-100 text-zinc-800 border-zinc-300",
+    activePillDarkCls: "bg-white text-black border-white shadow-[0_0_12px_rgba(255,255,255,0.25)]",
+    activePillLightCls: "bg-zinc-900 text-white border-zinc-900 shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+    pinHex: "#a1a1aa",
+  },
+  {
+    id: "1-25",
+    label: "1–25",
+    tierName: "ENTRY",
+    min: 1,
+    max: 25,
+    dotCls: "bg-emerald-400",
+    textDarkCls: "text-emerald-400",
+    textLightCls: "text-emerald-600",
+    badgeDarkCls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/35",
+    badgeLightCls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+    activePillDarkCls: "bg-emerald-500/20 text-emerald-300 border-emerald-400/70 shadow-[0_0_12px_rgba(16,185,129,0.25)]",
+    activePillLightCls: "bg-emerald-600 text-white border-emerald-600 shadow-[0_2px_8px_rgba(16,185,129,0.3)]",
+    pinHex: "#10b981",
+  },
+  {
+    id: "26-50",
+    label: "26–50",
+    tierName: "CORE",
+    min: 26,
+    max: 50,
+    dotCls: "bg-sky-400",
+    textDarkCls: "text-sky-400",
+    textLightCls: "text-sky-600",
+    badgeDarkCls: "bg-sky-500/15 text-sky-300 border-sky-500/35",
+    badgeLightCls: "bg-sky-500/10 text-sky-700 border-sky-500/30",
+    activePillDarkCls: "bg-sky-500/20 text-sky-300 border-sky-400/70 shadow-[0_0_12px_rgba(14,165,233,0.25)]",
+    activePillLightCls: "bg-sky-600 text-white border-sky-600 shadow-[0_2px_8px_rgba(14,165,233,0.3)]",
+    pinHex: "#0ea5e9",
+  },
+  {
+    id: "51-75",
+    label: "51–75",
+    tierName: "HARD",
+    min: 51,
+    max: 75,
+    dotCls: "bg-amber-400",
+    textDarkCls: "text-amber-400",
+    textLightCls: "text-amber-600",
+    badgeDarkCls: "bg-amber-500/15 text-amber-300 border-amber-500/35",
+    badgeLightCls: "bg-amber-500/10 text-amber-700 border-amber-500/30",
+    activePillDarkCls: "bg-amber-500/20 text-amber-300 border-amber-400/70 shadow-[0_0_12px_rgba(245,158,11,0.25)]",
+    activePillLightCls: "bg-amber-500 text-white border-amber-500 shadow-[0_2px_8px_rgba(245,158,11,0.3)]",
+    pinHex: "#f59e0b",
+  },
+  {
+    id: "76-100",
+    label: "76–100",
+    tierName: "APEX",
+    min: 76,
+    max: 100,
+    dotCls: "bg-rose-500",
+    textDarkCls: "text-rose-400",
+    textLightCls: "text-rose-600",
+    badgeDarkCls: "bg-rose-500/15 text-rose-300 border-rose-500/35",
+    badgeLightCls: "bg-rose-500/10 text-rose-700 border-rose-500/30",
+    activePillDarkCls: "bg-rose-500/20 text-rose-300 border-rose-400/70 shadow-[0_0_12px_rgba(244,63,94,0.25)]",
+    activePillLightCls: "bg-rose-600 text-white border-rose-600 shadow-[0_2px_8px_rgba(244,63,94,0.3)]",
+    pinHex: "#f43f5e",
+  },
+];
+
+export const getSkillRating = (skill?: { points?: number | string; difficulty?: string | number } | null): number => {
+  if (!skill) return 0;
+  if (typeof skill.points === "number" && !isNaN(skill.points) && skill.points > 0) {
+    return skill.points;
+  }
+  const p = parseFloat(String(skill.points || ""));
+  if (!isNaN(p) && p > 0) return p;
+  const d = parseFloat(String(skill.difficulty || ""));
+  if (!isNaN(d) && d > 0) return d;
+  return 0;
+};
+
+export const getSkillTierConfig = (rating: number): SkillRatingTierConfig => {
+  const r = Math.round(rating);
+  if (r <= 0) return SKILL_RATING_TIERS[0];
+  if (r <= 25) return SKILL_RATING_TIERS[1];
+  if (r <= 50) return SKILL_RATING_TIERS[2];
+  if (r <= 75) return SKILL_RATING_TIERS[3];
+  return SKILL_RATING_TIERS[4];
+};
+
+export const parseRatingRangeParam = (param: string | null | undefined): { min: number; max: number } | null => {
+  if (!param || param === "all") return null;
+  const clean = param.trim();
+  const rangeMatch = clean.match(/^(\d{1,3})\s*[-–..]+\s*(\d{1,3})$/);
+  if (rangeMatch) {
+    const a = parseInt(rangeMatch[1], 10);
+    const b = parseInt(rangeMatch[2], 10);
+    return { min: Math.min(a, b), max: Math.max(a, b) };
+  }
+  return null;
+};
+
+export const parseRatingRangesList = (param: string | null | undefined): { min: number; max: number }[] => {
+  if (!param || param === "all") return [];
+  const parts = param.split(",").map(s => s.trim()).filter(Boolean);
+  const ranges: { min: number; max: number }[] = [];
+  for (const p of parts) {
+    const r = parseRatingRangeParam(p);
+    if (r) ranges.push(r);
+  }
+  return ranges;
+};
+
+export const toggleRatingTierParam = (currentParam: string | null | undefined, clickedTierId: SkillRatingTierId): string => {
+  if (clickedTierId === "all") return "all";
+  const allNonAllIds: SkillRatingTierId[] = ["1-25", "26-50", "51-75", "76-100"];
+  const currentParts = (currentParam && currentParam !== "all" ? currentParam.split(",") : [])
+    .map(s => s.trim())
+    .filter((s): s is SkillRatingTierId => allNonAllIds.includes(s as SkillRatingTierId));
+
+  const nextSet = new Set<SkillRatingTierId>(currentParts);
+  if (nextSet.has(clickedTierId)) {
+    nextSet.delete(clickedTierId);
+  } else {
+    nextSet.add(clickedTierId);
+  }
+
+  // If 0 selected or all 4 tiers selected, return "all"
+  if (nextSet.size === 0 || nextSet.size === allNonAllIds.length) {
+    return "all";
+  }
+
+  return allNonAllIds.filter(id => nextSet.has(id)).join(",");
+};
+
+export const parseSearchQueryWithRating = (rawQuery: string): {
+  textQuery: string;
+  ratingRange: { min: number; max: number } | null;
+} => {
+  if (!rawQuery || !rawQuery.trim()) {
+    return { textQuery: "", ratingRange: null };
+  }
+  const tokens = rawQuery.trim().split(/\s+/);
+  const textTokens: string[] = [];
+  let ratingRange: { min: number; max: number } | null = null;
+
+  for (const token of tokens) {
+    // Match range e.g. "1-25", "10-40", "10..40"
+    const rangeMatch = token.match(/^(\d{1,3})(?:[-–]|\.\.)(\d{1,3})$/);
+    if (rangeMatch) {
+      const a = parseInt(rangeMatch[1], 10);
+      const b = parseInt(rangeMatch[2], 10);
+      if (a >= 0 && b <= 100) {
+        ratingRange = { min: Math.max(1, Math.min(a, b)), max: Math.max(a, b) };
+        continue;
+      }
+    }
+    // Match <=30 or <30
+    const ltMatch = token.match(/^<=?(\d{1,3})$/);
+    if (ltMatch) {
+      const maxVal = parseInt(ltMatch[1], 10);
+      const isStrict = !token.startsWith("<=");
+      ratingRange = { min: 1, max: isStrict ? Math.max(1, maxVal - 1) : maxVal };
+      continue;
+    }
+    // Match >=70 or >70 or 70+
+    const gtMatch = token.match(/^(?:>=?(\d{1,3})|(\d{1,3})\+)$/);
+    if (gtMatch) {
+      const minVal = parseInt(gtMatch[1] || gtMatch[2], 10);
+      const isStrict = token.startsWith(">") && !token.startsWith(">=");
+      ratingRange = { min: isStrict ? Math.min(100, minVal + 1) : minVal, max: 100 };
+      continue;
+    }
+    // Match =50
+    const eqMatch = token.match(/^=(\d{1,3})$/);
+    if (eqMatch) {
+      const val = parseInt(eqMatch[1], 10);
+      ratingRange = { min: val, max: val };
+      continue;
+    }
+    textTokens.push(token);
+  }
+
+  return {
+    textQuery: textTokens.join(" "),
+    ratingRange,
+  };
+};
+
+

@@ -287,7 +287,7 @@ export const ASRListItem = React.memo(
  className={cn(
  "group flex items-center justify-between transition-all duration-300 ios-clip-fix outline-none text-left w-full",
  isCompact
- ? "py-3 pl-3 pr-1.5 rounded-[1.25rem] border h-auto min-h-[64px]"
+ ? cn("py-3 pl-3 rounded-[1.25rem] border h-auto min-h-[64px]", showVideoIcon ? "pr-1.5" : "pr-3.5")
  : "py-3 sm:py-5 lg:py-6 pl-3 sm:pl-6 lg:pl-8 pr-1.5 sm:pr-4 rounded-[1.25rem] sm:rounded-[1.5rem] lg:rounded-[2rem] border h-auto min-h-[64px] sm:min-h-[80px] lg:min-h-[100px] ",
  onClick && !isUnclaimed
  ? `cursor-pointer active:scale-95 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 ${"theme-focus"} ${cardHover}`
@@ -393,7 +393,7 @@ export const ASRListItem = React.memo(
  </div>
  </div>
  <div className="flex items-center pr-0 shrink-0 h-full">
- <div className="flex items-center justify-end text-right h-full">
+ <div className={cn("flex items-center justify-end text-right h-full", isCompact ? "gap-2" : "gap-2 sm:gap-4")}>
  {(stats || []).map((s: { value?: React.ReactNode }, idx: number) => {
    const colDef = columns?.filter(
      (c: { isRank?: boolean; type?: string }) => !c.isRank && c.type !== "profile",
@@ -431,8 +431,8 @@ export const ASRListItem = React.memo(
  {showVideoIcon && (
  <div
  className={cn(
- "flex items-center justify-center shrink-0 ml-2 sm:ml-3",
- isCompact ? "w-10" : "w-10 sm:w-12",
+ "flex items-center justify-center shrink-0",
+ isCompact ? "w-7 ml-1.5" : "w-10 sm:w-12 ml-2 sm:ml-3",
  )}
  >
  {videoUrl ? (
@@ -483,6 +483,8 @@ export const ASRListItem = React.memo(
  if (prev.showVideoIcon !== next.showVideoIcon) return false;
  if (prev.mapUrl !== next.mapUrl) return false;
  if (prev.icon !== next.icon) return false;
+ if (prev.badgeContent !== next.badgeContent) return false;
+ if (prev.isHighlighted !== next.isHighlighted) return false;
 
  // Check array lengths
  if (prev.stats?.length !== next.stats?.length) return false;

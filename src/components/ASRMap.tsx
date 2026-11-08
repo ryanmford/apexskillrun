@@ -7,7 +7,7 @@ import "leaflet.markercluster";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
-import { trackEvent, cn } from "../lib/asr-utils";
+import { trackEvent, cn, getSkillRating, getSkillTierConfig } from "../lib/asr-utils";
 import { ThemeContext } from "../theme-context";
 import { useAppStore } from "../store/useAppStore";
 import { SkillData } from "../types";
@@ -57,6 +57,7 @@ export const ASRMap = forwardRef(({
   const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null);
   const tileLayersRef = useRef<{ light?: L.TileLayer; dark?: L.TileLayer }>({});
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const skillDataRef = useRef<Map<string, SkillData>>(new Map());
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const fitMapToSkills = React.useCallback(() => {
@@ -113,6 +114,7 @@ export const ASRMap = forwardRef(({
   useImperativeHandle(ref, () => ({
     locateUser: handleFindMe,
     resetView: resetViewToDefault,
+    fitToChallenges: fitMapToSkills,
   }));
 
   const onSkillClickRef = useRef(onSkillClick);
@@ -204,12 +206,26 @@ export const ASRMap = forwardRef(({
 
     const getClusterIcon = (cluster: any) => {
       const count = cluster.getChildCount();
-      let gradientStyle = "linear-gradient(90deg, #52525b, #a1a1aa, #f4f4f5, #a1a1aa, #52525b)";
-      if (count > 50) {
-        gradientStyle = "linear-gradient(90deg, #52525b, #a1a1aa, #f4f4f5, #a1a1aa, #52525b)";
+      const childMarkers = typeof cluster.getAllChildMarkers === "function" ? cluster.getAllChildMarkers() : [];
+      const ratings: number[] = [];
+      const tierHexSet = new Set<string>();
+
+      for (let i = 0; i < childMarkers.length; i++) {
+        const r = Number((childMarkers[i] as any)?._skillRating || 0);
+        if (r > 0) {
+          ratings.push(r);
+          tierHexSet.add(getSkillTierConfig(r).pinHex);
+        }
       }
-      if (count > 150) {
-        gradientStyle = "linear-gradient(90deg, #52525b, #a1a1aa, #f4f4f5, #a1a1aa, #52525b)";
+
+      const uniqueHexes = Array.from(tierHexSet);
+      let gradientStyle = "linear-gradient(90deg, #52525b, #a1a1aa, #f4f4f5, #a1a1aa, #52525b)";
+      if (uniqueHexes.length === 1) {
+        const c = uniqueHexes[0];
+        gradientStyle = `linear-gradient(90deg, ${c}, ${c}cc, #ffffff, ${c}cc, ${c})`;
+      } else if (uniqueHexes.length > 1) {
+        const stops = [...uniqueHexes, uniqueHexes[0]].join(", ");
+        gradientStyle = `linear-gradient(90deg, ${stops})`;
       }
 
       const currentIsDark = isDarkRef.current;
@@ -218,10 +234,30 @@ export const ASRMap = forwardRef(({
         ? 'bg-zinc-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-1px_2px_rgba(0,0,0,0.8)]' 
         : 'bg-white shadow-[inset_0_2px_3px_rgba(255,255,255,1),inset_0_-1px_2px_rgba(0,0,0,0.1)]';
       const textColor = currentIsDark ? 'text-white' : 'text-zinc-900';
+      const tooltipClasses = currentIsDark
+        ? 'bg-zinc-950/95 text-white border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.85)]'
+        : 'bg-white/95 text-zinc-950 border-black/15 shadow-[0_4px_16px_rgba(0,0,0,0.15)]';
+
+      let clusterHoverHtml = "";
+      if (ratings.length > 0) {
+        const minR = Math.min(...ratings);
+        const maxR = Math.max(...ratings);
+        const rangeLabel = minR === maxR ? `LVL ${minR}` : `LVL ${minR}–${maxR}`;
+        clusterHoverHtml = `
+          <div class="absolute bottom-[54px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 group-hover:translate-y-0 scale-95 group-hover:scale-100 z-50 whitespace-nowrap">
+            <div class="relative flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md ${tooltipClasses}">
+              <span class="text-[10px] font-mono font-black tracking-widest uppercase select-none leading-none">
+                ${rangeLabel}
+              </span>
+            </div>
+          </div>
+        `;
+      }
 
       return L.divIcon({
         html: `
           <div class="relative flex items-center justify-center w-full h-full transition-transform duration-300 hover:scale-110 group cursor-pointer ${outerShadow} rounded-full">
+            ${clusterHoverHtml}
             <div class="absolute inset-0 rounded-full z-0 animate-border-shift blur-[4px] opacity-60" style="background: ${gradientStyle}; background-size: 200% 100%;"></div>
             <div class="absolute inset-0 rounded-full z-0 animate-border-shift opacity-90" style="background: ${gradientStyle}; background-size: 200% 100%;"></div>
             <div class="absolute inset-[1.5px] rounded-full z-10 backdrop-blur-md transition-colors ${innerSurface}"></div>
@@ -367,13 +403,20 @@ export const ASRMap = forwardRef(({
       .replace(/'/g, "&#039;");
   };
 
-  // Helper to create marker icon
-  const createPinIcon = (skillName: string, isActive: boolean) => {
+  // Helper to create marker icon with 1-100 difficulty rating stamped inside
+  const createPinIcon = (skillOrName: SkillData | string, isActive: boolean) => {
+    const skillName = typeof skillOrName === "string" ? skillOrName : (skillOrName?.name || "");
+    const skillObj = typeof skillOrName === "string" ? skillDataRef.current.get(skillOrName) : skillOrName;
+    const ratingVal = getSkillRating(skillObj);
+    const ratingInt = Math.round(ratingVal);
+    const tierCfg = getSkillTierConfig(ratingInt);
+    const hasRating = ratingInt > 0;
+
     const currentIsDark = isDarkRef.current;
-    const outerShadow = currentIsDark ? 'shadow-[0_4px_12px_rgba(0,0,0,0.6)]' : 'shadow-[0_4px_12px_rgba(0,0,0,0.2)]';
+    const outerShadow = currentIsDark ? 'shadow-[0_4px_12px_rgba(0,0,0,0.7)]' : 'shadow-[0_4px_12px_rgba(0,0,0,0.25)]';
     const innerSurface = currentIsDark 
-      ? 'bg-zinc-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-1px_2px_rgba(0,0,0,0.8)]' 
-      : 'bg-white shadow-[inset_0_2px_3px_rgba(255,255,255,1),inset_0_-1px_2px_rgba(0,0,0,0.1)]';
+      ? 'bg-zinc-950 shadow-[inset_0_1px_1px_rgba(255,255,255,0.12),inset_0_-1px_2px_rgba(0,0,0,0.9)]' 
+      : 'bg-white shadow-[inset_0_2px_3px_rgba(255,255,255,1),inset_0_-1px_2px_rgba(0,0,0,0.12)]';
 
     const dotClasses = currentIsDark 
       ? 'bg-white shadow-[0_0_12px_rgba(255,255,255,0.9)]'
@@ -387,34 +430,49 @@ export const ASRMap = forwardRef(({
       ? 'bg-zinc-950/95 text-white border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.85)]'
       : 'bg-white/95 text-zinc-950 border-black/15 shadow-[0_4px_16px_rgba(0,0,0,0.15)]';
 
-    const activeOuterClasses = isActive ? 'scale-[1.5] z-[1000] brightness-125' : 'hover:scale-[1.15] active:scale-95 drop-shadow-lg';
+    const activeOuterClasses = isActive ? 'scale-[1.4] z-[1000] brightness-110' : 'hover:scale-[1.15] active:scale-95 drop-shadow-lg';
     
     const shortName = getSkillDisplayName(skillName);
     const escapedShortName = escapeHtml(shortName);
 
+    const ratingBadgeHtml = hasRating
+      ? `<span class="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-mono font-black leading-none" style="background-color: ${tierCfg.pinHex}22; color: ${tierCfg.pinHex}; border: 1px solid ${tierCfg.pinHex}66;">${ratingInt}</span>`
+      : "";
+
     const hoverPillHtml = escapedShortName
-      ? `<div class="absolute bottom-[38px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 group-hover:translate-y-0 scale-95 group-hover:scale-100 z-50 whitespace-nowrap">
+      ? `<div class="absolute bottom-[40px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 group-hover:translate-y-0 scale-95 group-hover:scale-100 z-50 whitespace-nowrap">
            <div class="relative flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md ${tooltipClasses}">
              <span class="text-[10px] sm:text-[11px] font-mono font-black tracking-widest uppercase select-none leading-none">
                ${escapedShortName}
              </span>
+             ${ratingBadgeHtml}
            </div>
          </div>`
       : "";
+
+    const ringStyle = hasRating
+      ? `border: 2px solid ${tierCfg.pinHex}; box-shadow: 0 0 ${isActive ? '14px' : '6px'} ${tierCfg.pinHex}${isActive ? 'aa' : '55'};`
+      : "";
+
+    const innerContentHtml = hasRating
+      ? `<span class="relative z-20 font-mono font-black text-[10px] tracking-tighter leading-none select-none" style="color: ${isActive ? (currentIsDark ? '#ffffff' : '#09090b') : tierCfg.pinHex};">${ratingInt}</span>`
+      : `<div class="relative z-20 w-1.5 h-1.5 rounded-full ${dotClasses} ${isActive ? 'scale-125' : 'group-hover:scale-125'} transition-all"></div>`;
 
     return L.divIcon({
       html: `
         <div class="asr-pin relative flex flex-col items-center justify-center group transition-all duration-300 cursor-pointer ${activeOuterClasses}" style="width: 44px; height: 44px;">
           ${hoverPillHtml}
           <div class="absolute inset-0 bg-transparent"></div>
-          <div class="relative flex flex-col items-center mt-2">
-            <div class="relative w-6 h-6 rounded-full flex items-center justify-center ${outerShadow}">
-              <div class="absolute inset-0 rounded-full animate-border-shift neon-gradient-base blur-[4px] opacity-50 z-0"></div>
-              <div class="absolute inset-0 rounded-full animate-border-shift neon-gradient-base opacity-90 z-0"></div>
-              <div class="absolute inset-[1.5px] rounded-full z-10 backdrop-blur-md transition-colors ${innerSurface}"></div>
-              <div class="relative z-20 w-1.5 h-1.5 rounded-full ${dotClasses} ${isActive ? 'scale-125' : 'group-hover:scale-125'} transition-all"></div>
+          <div class="relative flex flex-col items-center mt-1.5">
+            <div class="relative w-7 h-7 rounded-full flex items-center justify-center ${outerShadow}" style="${ringStyle}">
+              ${!hasRating ? `
+                <div class="absolute inset-0 rounded-full animate-border-shift neon-gradient-base blur-[4px] opacity-50 z-0"></div>
+                <div class="absolute inset-0 rounded-full animate-border-shift neon-gradient-base opacity-90 z-0"></div>
+              ` : ''}
+              <div class="absolute inset-[1.5px] rounded-full z-10 transition-colors ${innerSurface}"></div>
+              ${innerContentHtml}
             </div>
-            <div class="w-[2px] h-[8px] bg-gradient-to-b ${stemClasses} to-transparent rounded-b-full"></div>
+            <div class="w-[2px] h-[7px] bg-gradient-to-b ${stemClasses} to-transparent rounded-b-full"></div>
           </div>
         </div>
       `,
@@ -436,6 +494,7 @@ export const ASRMap = forwardRef(({
        if (!currentSkillIds.has(id)) {
           markersToRemove.push(marker);
           markersRef.current.delete(id);
+          skillDataRef.current.delete(id);
        }
     }
 
@@ -443,19 +502,22 @@ export const ASRMap = forwardRef(({
        clusterGroupRef.current.removeLayers(markersToRemove);
     }
 
-    // Add or update markers Let's add new markers without blowing up the whole cluster.
+    // Add or update markers without blowing up the whole cluster.
     const newMarkers: L.Marker[] = [];
 
     challenges.forEach((c: SkillData & { parsedCoords?: [number, number] }) => {
       const id = c.name;
       if (!c.parsedCoords) return;
 
+      const prevSkill = skillDataRef.current.get(id);
+      skillDataRef.current.set(id, c);
       const isActive = activeSkillId === id;
 
       if (!markersRef.current.has(id)) {
          const marker = L.marker(c.parsedCoords, {
-            icon: createPinIcon(c.name, isActive)
+            icon: createPinIcon(c, isActive)
          });
+         (marker as any)._skillRating = Math.round(getSkillRating(c));
 
          marker.on("mouseover", () => {
             marker.setZIndexOffset(10000);
@@ -490,12 +552,21 @@ export const ASRMap = forwardRef(({
 
          markersRef.current.set(id, marker);
          newMarkers.push(marker);
+      } else {
+         const existingMarker = markersRef.current.get(id);
+         if (existingMarker) {
+           (existingMarker as any)._skillRating = Math.round(getSkillRating(c));
+           if (getSkillRating(prevSkill) !== getSkillRating(c)) {
+             existingMarker.setIcon(createPinIcon(c, isActive));
+           }
+         }
       }
     });
 
     if (newMarkers.length > 0) {
       clusterGroupRef.current.addLayers(newMarkers);
     }
+    clusterGroupRef.current.refreshClusters();
 
   }, [challenges, mapReady]); 
 
@@ -504,7 +575,8 @@ export const ASRMap = forwardRef(({
     if (!mapReady) return;
     for (const [id, marker] of markersRef.current.entries()) {
       const isActive = activeSkillId === id;
-      marker.setIcon(createPinIcon(id, isActive));
+      const skillObj = skillDataRef.current.get(id) || id;
+      marker.setIcon(createPinIcon(skillObj, isActive));
       
       // Feature: push to top visually
       if (isActive) {

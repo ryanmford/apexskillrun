@@ -10,11 +10,13 @@ import { useAppNavigation } from "../../hooks/useDerivedData";
 
 interface ColumnDef<T> {
   key: keyof T | string;
-  label: string;
+  label: React.ReactNode;
   type?: string;
   isRank?: boolean;
   color?: string;
   width?: string;
+  onHeaderClick?: () => void;
+  isActiveSort?: boolean;
   getValue?: (item: T) => React.ReactNode;
 }
 
@@ -31,7 +33,7 @@ interface ASRDataTableProps<T = Record<string, unknown>> {
  scrollElementRef?: React.RefObject<HTMLElement | null>;
  showRankings?: boolean;
  hideSubtitle?: boolean;
- middleLabel?: string;
+ middleLabel?: React.ReactNode;
  showVideoColumn?: boolean;
 }
 
@@ -159,8 +161,8 @@ export const ASRDataTable = React.memo(
 
  const handleItemHover = React.useCallback((item: Record<string, unknown>, isHovering: boolean) => {
    if (isHovering) {
-     prefetchEntity(item);
-     setActiveSkillId((item?.id as string) || (item?.pKey as string) || null);
+     prefetchEntity();
+     setActiveSkillId((item?.id as string) || (item?.pKey as string) || (item?.name as string) || null);
    } else {
      setActiveSkillId(null);
    }
@@ -309,17 +311,17 @@ export const ASRDataTable = React.memo(
  {showRankings && (
  <div
  className={cn(
- "flex items-center text-[8px] sm:text-[10px] lg:text-[13px] font-black uppercase tracking-widest pt-4 pb-2 select-none border-b border-black/5 mb-2",
+ "flex items-center text-[8px] sm:text-[10px] lg:text-[13px] font-black uppercase tracking-widest pt-3 pb-2 select-none border-b mb-2",
  theme === "dark"
- ? "opacity-30 text-white border-white/5"
- : "opacity-50 text-zinc-900 border-black/5",
- viewType === "card" ? (isCompact ? "pl-3 pr-1.5 mx-4" : "pl-3 sm:pl-6 lg:pl-8 pr-1.5 sm:pr-4 mx-4") : "mx-4",
+ ? "text-white/35 border-white/5"
+ : "text-zinc-900/50 border-black/5",
+ viewType === "card" ? (isCompact ? cn("pl-3 mx-4", showVideoColumn ? "pr-1.5" : "pr-3.5") : "pl-3 sm:pl-6 lg:pl-8 pr-1.5 sm:pr-4 mx-4") : "mx-4",
  )}
  >
  {viewType === "card" ? (
           <div className={cn("flex items-center min-w-0 pr-1 flex-1", isCompact ? "gap-2" : "gap-2 sm:gap-4 lg:gap-6")}>
             <div className="w-6 sm:w-10 lg:w-12 shrink-0 flex items-center justify-center text-center">RANK</div>
-            <div className="flex flex-col min-w-0 flex-1 text-left">{middleLabel}</div>
+            <div className="flex items-center min-w-0 flex-1 text-left">{middleLabel}</div>
           </div>
         ) : (
           <>
@@ -333,18 +335,48 @@ export const ASRDataTable = React.memo(
  viewType === "card" ? (isCompact ? "gap-2" : "gap-2 sm:gap-4") : "gap-0",
  )}
  >
- {statColumns.map((c, i: number) => (
- <div
- key={i}
- className={cn(
-   "flex justify-end text-right shrink-0",
-   c.width ? c.width : viewType === "card" ? (isCompact ? "min-w-[50px]" : "min-w-[50px] sm:min-w-[80px] lg:min-w-[120px]") : "w-20 sm:w-24 lg:w-32 px-1 sm:px-4 lg:px-6"
- )}
- >
- {c.label}
- </div>
- ))}
- {showVideoColumn && <div className={cn("shrink-0", viewType === "card" ? (isCompact ? "w-10 ml-2 sm:ml-3" : "w-10 sm:w-12 ml-2 sm:ml-3") : "w-10 sm:w-16 lg:w-20 pr-4 sm:pr-6 lg:pr-8 ml-2")} />}
+ {statColumns.map((c, i: number) => {
+   const colWidthCls = c.width
+     ? c.width
+     : viewType === "card"
+       ? isCompact
+         ? "min-w-[50px]"
+         : "min-w-[50px] sm:min-w-[80px] lg:min-w-[120px]"
+       : "w-20 sm:w-24 lg:w-32 px-1 sm:px-4 lg:px-6";
+
+   if (c.onHeaderClick) {
+     return (
+       <button
+         key={i}
+         type="button"
+         onClick={c.onHeaderClick}
+         className={cn(
+           "flex items-center justify-end text-right shrink-0 transition-colors cursor-pointer outline-none active:scale-95",
+           colWidthCls,
+           c.isActiveSort
+             ? theme === "dark"
+               ? "text-white"
+               : "text-zinc-950"
+             : theme === "dark"
+               ? "text-white/40 hover:text-white/80"
+               : "text-zinc-900/50 hover:text-zinc-900"
+         )}
+       >
+         {c.label}
+       </button>
+     );
+   }
+
+   return (
+     <div
+       key={i}
+       className={cn("flex justify-end text-right shrink-0", colWidthCls)}
+     >
+       {c.label}
+     </div>
+   );
+ })}
+ {showVideoColumn && <div className={cn("shrink-0", viewType === "card" ? (isCompact ? "w-7 ml-1.5" : "w-10 sm:w-12 ml-2 sm:ml-3") : "w-10 sm:w-16 lg:w-20 pr-4 sm:pr-6 lg:pr-8 ml-2")} />}
  </div>
  </div>
  )}

@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { useSearchParams, useLocation } from "react-router-dom";
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import {
-  Zap,
   Compass,
   Users,
   Ruler,
@@ -20,6 +19,8 @@ import {
   getCombinedFlags,
   normalizeName,
   getSetterLevel,
+  getSkillRating,
+  getSkillTierConfig,
 } from "../../lib/asr-utils";
 import { parseSafeDate } from "../../lib/asr-data";
 import { useAppStore } from "../../store/useAppStore";
@@ -209,6 +210,7 @@ export const SkillDetails = React.memo(
 
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
+    const navigate = useNavigate();
     const urlTab = searchParams.get("tab");
     const validTabs = ["stats", "men", "women"];
     
@@ -291,16 +293,27 @@ export const SkillDetails = React.memo(
     const atRecordsM = dataContext.skillRecords_M_AT?.[cName] || [];
     const atRecordsF = dataContext.skillRecords_F_AT?.[cName] || [];
 
+    const ratingInt = Math.round(getSkillRating(meta));
+    const tierCfg = getSkillTierConfig(ratingInt);
+    const lengthMeters = meta.length ? Math.round(parseFloat(meta.length) || 0) : 0;
+    const elevNum = meta.elevation ? parseFloat(meta.elevation) : NaN;
+    const hasElev = !isNaN(elevNum) && meta.elevation !== "";
+
+    const handleFilterMapByTier = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (tierCfg.id === "all") return;
+      const nextParams = new URLSearchParams();
+      const eventTypeParam = searchParams.get("eventType");
+      if (eventTypeParam) nextParams.set("eventType", eventTypeParam);
+      nextParams.set("rating", tierCfg.id);
+      navigate(`/challenges?${nextParams.toString()}`, { replace: false, state: {} });
+    };
+
     const stats = [
       {
-        label: "Difficulty",
-        value: meta.difficulty || "-",
+        label: "Level",
+        value: ratingInt > 0 ? String(ratingInt) : (meta.difficulty || "-"),
         icon: <Compass className="w-3.5 h-3.5" />,
-      },
-      {
-        label: "Points",
-        value: meta.points ? String(meta.points) : "-",
-        icon: <Zap className="w-3.5 h-3.5" />,
       },
       {
         label: "Players",
@@ -312,16 +325,12 @@ export const SkillDetails = React.memo(
       },
       {
         label: "Length",
-        value: meta.length
-          ? `${Math.round(parseFloat(meta.length) || 0)}m`
-          : "-",
+        value: lengthMeters > 0 ? `${lengthMeters}m` : "-",
         icon: <Ruler className="w-3.5 h-3.5" />,
       },
       {
         label: "Elevation",
-        value: meta.elevation
-          ? `${(parseFloat(meta.elevation) || 0).toFixed(2)}m`
-          : "-",
+        value: hasElev ? `${elevNum.toFixed(2)}m` : "-",
         icon: <Mountain className="w-3.5 h-3.5" />,
       },
       {
@@ -369,9 +378,65 @@ export const SkillDetails = React.memo(
             </span>
           }
           subtitle={
-            <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest mt-1 w-full min-w-0">
-              <MapPin size={12} className="shrink-0" />
-              <span className="truncate">{formatLocation(meta)}</span>
+            <div className="flex flex-col gap-1.5 mt-1 w-full min-w-0">
+              <div className="flex items-center gap-1.5 opacity-60 font-black text-[11px] uppercase tracking-widest w-full min-w-0">
+                <MapPin size={12} className="shrink-0" />
+                <span className="truncate">{formatLocation(meta)}</span>
+              </div>
+              {(ratingInt > 0 || lengthMeters > 0 || hasElev || meta.type) && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  {ratingInt > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleFilterMapByTier}
+                      title={`Filter map to LVL ${tierCfg.label} challenges`}
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer",
+                        theme === "dark" ? tierCfg.badgeDarkCls : tierCfg.badgeLightCls
+                      )}
+                    >
+                      <span className={cn("w-1.5 h-1.5 rounded-full", tierCfg.dotCls)} />
+                      <span>LVL {ratingInt}</span>
+                    </button>
+                  )}
+                  {lengthMeters > 0 && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider",
+                        theme === "dark"
+                          ? "bg-white/[0.04] border-white/10 text-zinc-300"
+                          : "bg-black/[0.04] border-black/10 text-zinc-700"
+                      )}
+                    >
+                      {lengthMeters}M
+                    </span>
+                  )}
+                  {hasElev && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider",
+                        theme === "dark"
+                          ? "bg-white/[0.04] border-white/10 text-zinc-300"
+                          : "bg-black/[0.04] border-black/10 text-zinc-700"
+                      )}
+                    >
+                      {elevNum > 0 ? `+${elevNum.toFixed(2)}M` : `${elevNum.toFixed(2)}M`}
+                    </span>
+                  )}
+                  {meta.type && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wider",
+                        theme === "dark"
+                          ? "bg-white/[0.04] border-white/10 text-zinc-400"
+                          : "bg-black/[0.04] border-black/10 text-zinc-600"
+                      )}
+                    >
+                      {meta.type}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           }
 

@@ -211,6 +211,9 @@ export const processSetListData = (csv: string) => {
       const leadsRaw = (vals.leads || "").trim();
       const assistsRaw = (vals.assists || "").trim();
 
+      const parsedDiff = parseSkillDifficulty(String(vals.rating || "").trim());
+      const parsedPts = parseFloat(String(vals.rating || "").trim());
+
       map[challenge] = {
         name: challenge,
         isOpenSkill,
@@ -220,8 +223,8 @@ export const processSetListData = (csv: string) => {
         city: (vals.city || "").trim().toUpperCase() || "UNKNOWN",
         stateProv: (vals.state || "").trim().toUpperCase(),
         country: fixed.name.toUpperCase() || "UNKNOWN",
-        difficulty: parseSkillDifficulty(String(vals.rating || "").trim()),
-        points: parseFloat(String(vals.rating || "0").trim()) || 0,
+        difficulty: parsedDiff,
+        points: !isNaN(parsedPts) && parsedPts > 0 ? parsedPts : (parseFloat(parsedDiff) || 0),
         length: String(vals.length || "").trim(),
         elevation: (vals.elev || "").trim(),
         type: (vals.type || "").trim(),

@@ -10,12 +10,23 @@ import { useDataStore } from "../../store/useDataStore";
 import { useAppNavigation, useSkillList, useURLState } from "../../hooks/useDerivedData";
 import { useDebounce } from "../../hooks/useDataHooks";
 import { useAppStore } from "../../store/useAppStore";
-import { cn } from "../../lib/asr-utils";
+import {
+  cn,
+  SKILL_RATING_TIERS,
+  SkillRatingTierId,
+  getSkillRating,
+  getSkillTierConfig,
+  parseRatingRangesList,
+  toggleRatingTierParam,
+  parseSearchQueryWithRating,
+} from "../../lib/asr-utils";
 import { normalizeForSearch } from "../../lib/utils";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Compass } from "lucide-react";
 import { ASRSearchInput } from "../common/ASRSearchInput";
 
 const ASRMap = React.lazy(() => import("../ASRMap").then((m) => ({ default: m.ASRMap })));
+
+type MapSortMode = "sends_desc" | "sends_asc" | "easiest" | "hardest";
 
 export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" }) => {
   const isLoading = useDataStore(s => s.isLoading);
@@ -27,6 +38,16 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   const location = useLocation();
   const searchKey = `q_SKILLS`;
   const search = searchParams.get("q") || searchParams.get(searchKey) || "";
+  const ratingParam = searchParams.get("rating") || "all";
+  const rawSort = searchParams.get("sort");
+  const sortMode: MapSortMode =
+    rawSort === "easiest" ||
+    rawSort === "hardest" ||
+    rawSort === "sends_asc" ||
+    rawSort === "sends_desc"
+      ? rawSort
+      : "sends_desc";
+
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const listRefDesktop = useRef<any>(null);
   const listRefMobile = useRef<any>(null);
@@ -39,8 +60,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   const setActiveSkillId = useAppStore(s => s.setActiveSkillId);
   
   const runKey = isAllTimeContext ? "totalAllTimeRuns" : (eventType === "2026" ? "season26Runs" : eventType === "open" ? "openRuns" : "totalAllTimeRuns");
-  const columns = React.useMemo(() => [{ label: "SENDS", key: runKey }], [runKey]);
-  
+
   const setSearch = (val: string) => {
     startTransition(() => {
       setSearchParams(prev => {
@@ -56,6 +76,120 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
     });
   };
 
+  const setRatingFilter = React.useCallback((clickedTier: SkillRatingTierId) => {
+    startTransition(() => {
+      setSearchParams(prev => {
+        const current = prev.get("rating") || "all";
+        const nextVal = toggleRatingTierParam(current, clickedTier);
+        if (nextVal === "all") {
+          prev.delete("rating");
+        } else {
+          prev.set("rating", nextVal);
+        }
+        return prev;
+      }, { replace: true, state: location.state });
+    });
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSnap(prevSnap => (prevSnap < 0.5 ? 0.5 : prevSnap));
+    }
+  }, [setSearchParams, location.state]);
+
+  const setSortMode = React.useCallback((nextSort: MapSortMode) => {
+    startTransition(() => {
+      setSearchParams(prev => {
+        if (nextSort === "sends_desc") {
+          prev.delete("sort");
+        } else {
+          prev.set("sort", nextSort);
+        }
+        return prev;
+      }, { replace: true, state: location.state });
+    });
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSnap(prevSnap => (prevSnap < 0.5 ? 0.5 : prevSnap));
+    }
+    if (scrollContainerRefDesktop.current) {
+      scrollContainerRefDesktop.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    if (scrollContainerRefMobile.current) {
+      scrollContainerRefMobile.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [setSearchParams, location.state]);
+
+  const handleLvlHeaderClick = React.useCallback(() => {
+    // Cycle LVL sort: easiest (1 -> 100) <-> hardest (100 -> 1)
+    setSortMode(sortMode === "easiest" ? "hardest" : "easiest");
+  }, [sortMode, setSortMode]);
+
+  const handleSendsHeaderClick = React.useCallback(() => {
+    // Cycle SENDS sort: most sends (desc) <-> fewest sends (asc)
+    setSortMode(sortMode === "sends_desc" ? "sends_asc" : "sends_desc");
+  }, [sortMode, setSortMode]);
+
+  const clearAllFilters = React.useCallback(() => {
+    startTransition(() => {
+      setSearchParams(prev => {
+        prev.delete(searchKey);
+        prev.delete("q");
+        prev.delete("rating");
+        return prev;
+      }, { replace: true, state: location.state });
+    });
+  }, [setSearchParams, location.state, searchKey]);
+
+  const columns = React.useMemo(() => {
+    const isLvlSort = sortMode === "easiest" || sortMode === "hardest";
+    const isSendsSort = sortMode === "sends_desc" || sortMode === "sends_asc";
+
+    return [
+      {
+        label: (
+          <span className="inline-flex items-center gap-0.5">
+            <span>LVL</span>
+            <span className="text-[9px] leading-none">
+              {sortMode === "easiest" ? "↑" : sortMode === "hardest" ? "↓" : "↕"}
+            </span>
+          </span>
+        ),
+        key: "points",
+        width: "w-12 sm:w-14",
+        isActiveSort: isLvlSort,
+        onHeaderClick: handleLvlHeaderClick,
+        getValue: (c: SkillData) => {
+          const rating = Math.round(getSkillRating(c));
+          if (rating <= 0) {
+            return <span className="opacity-30 text-xs font-mono">--</span>;
+          }
+          const tier = getSkillTierConfig(rating);
+          return (
+            <span
+              className={cn(
+                "font-mono font-black text-[14px] sm:text-[15px] tabular-nums tracking-tight",
+                theme === "dark" ? tier.textDarkCls : tier.textLightCls
+              )}
+            >
+              {rating}
+            </span>
+          );
+        },
+      },
+      {
+        label: (
+          <span className="inline-flex items-center gap-0.5">
+            <span>SENDS</span>
+            <span className="text-[9px] leading-none">
+              {sortMode === "sends_desc" ? "↓" : sortMode === "sends_asc" ? "↑" : "↕"}
+            </span>
+          </span>
+        ),
+        key: runKey,
+        width: "w-14 sm:w-16",
+        isActiveSort: isSendsSort,
+        onHeaderClick: handleSendsHeaderClick,
+      },
+    ];
+  }, [runKey, theme, sortMode, handleLvlHeaderClick, handleSendsHeaderClick]);
+
   const refreshTrigger = useDataStore(s => s.refreshTrigger);
   const prevRefreshTrigger = useRef(refreshTrigger);
 
@@ -63,7 +197,15 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
     if (refreshTrigger > prevRefreshTrigger.current) {
       prevRefreshTrigger.current = refreshTrigger;
       // Reset view to default when nav dock button is clicked while active
-      setSearch("");
+      startTransition(() => {
+        setSearchParams(prev => {
+          prev.delete(searchKey);
+          prev.delete("q");
+          prev.delete("rating");
+          prev.delete("sort");
+          return prev;
+        }, { replace: true, state: location.state });
+      });
       setActiveSkillId(null);
       setSnap(0.2);
       if (mapRef.current?.resetView) {
@@ -76,53 +218,147 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         scrollContainerRefMobile.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
-  }, [refreshTrigger, setActiveSkillId, setSnap]);
+  }, [refreshTrigger, setActiveSkillId, setSnap, setSearchParams, location.state, searchKey]);
 
   const debouncedSearch = useDebounce(search, 300);
 
-  const searchedData = useMemo(() => {
-    const term = normalizeForSearch(String(debouncedSearch || ""));
+  // Parse power-syntax rating operators from search input (e.g. "<30", "10-40", ">75")
+  const { textQuery, ratingRange: searchRatingRange } = useMemo(
+    () => parseSearchQueryWithRating(String(debouncedSearch || "")),
+    [debouncedSearch]
+  );
+
+  const urlRatingRanges = useMemo(
+    () => parseRatingRangesList(ratingParam),
+    [ratingParam]
+  );
+
+  const activeRatingRanges = useMemo(
+    () => (searchRatingRange ? [searchRatingRange] : urlRatingRanges),
+    [searchRatingRange, urlRatingRanges]
+  );
+
+  // Step 1: Filter by text query (name, city, state, country)
+  const textFilteredData = useMemo(() => {
+    const term = normalizeForSearch(textQuery);
     if (!term) return skillList;
     const searchTerms = term.split(/[\s,]+/).filter(Boolean);
     return skillList.filter((item: any) => {
-      if (item?.isDivider) return true;
+      if (item?.isDivider) return false;
       const key = item?.searchKey || "";
       return searchTerms.every((t: string) => key.includes(t));
     });
-  }, [debouncedSearch, skillList]);
+  }, [textQuery, skillList]);
+
+  // Helper to check if a challenge is inside current map viewport bounds
+  const isWithinBounds = React.useCallback((item: any, bounds: any) => {
+    if (!bounds) return true;
+    if (!item?.parsedCoords) return true;
+    const [lat, lng] = item.parsedCoords;
+    const latOk = lat >= bounds.south && lat <= bounds.north;
+    let lngOk: boolean;
+    if (bounds.west <= bounds.east) {
+      lngOk = lng >= bounds.west && lng <= bounds.east;
+    } else {
+      lngOk = lng >= bounds.west || lng <= bounds.east;
+    }
+    return latOk && lngOk;
+  }, []);
+
+  // Compute live viewport counts per tier so empty tiers automatically dim
+  const viewportTierCounts = useMemo(() => {
+    const counts: Record<SkillRatingTierId, number> = {
+      all: 0,
+      "1-25": 0,
+      "26-50": 0,
+      "51-75": 0,
+      "76-100": 0,
+    };
+    textFilteredData.forEach((item: any) => {
+      if (!item || item.isDivider) return;
+      if (!isWithinBounds(item, visibleBounds)) return;
+      counts.all++;
+      const r = Math.round(getSkillRating(item));
+      if (r >= 1 && r <= 25) counts["1-25"]++;
+      else if (r >= 26 && r <= 50) counts["26-50"]++;
+      else if (r >= 51 && r <= 75) counts["51-75"]++;
+      else if (r >= 76) counts["76-100"]++;
+    });
+    return counts;
+  }, [textFilteredData, visibleBounds, isWithinBounds]);
+
+  // Step 2: Filter by active rating range(s) (used for map pins & list)
+  const searchedData = useMemo(() => {
+    if (activeRatingRanges.length === 0) return textFilteredData;
+    return textFilteredData.filter((item: any) => {
+      if (!item || item.isDivider) return false;
+      const r = Math.round(getSkillRating(item));
+      if (r <= 0) return false;
+      return activeRatingRanges.some(range => r >= range.min && r <= range.max);
+    });
+  }, [textFilteredData, activeRatingRanges]);
 
   const lastAutoOpenedQueryRef = useRef("");
 
   React.useEffect(() => {
-    if (debouncedSearch && debouncedSearch !== lastAutoOpenedQueryRef.current) {
+    if (textQuery && textQuery !== lastAutoOpenedQueryRef.current) {
       const activeSkills = searchedData.filter((c: any) => c && !c.isDivider);
       if (activeSkills.length === 1) {
-        lastAutoOpenedQueryRef.current = debouncedSearch;
+        lastAutoOpenedQueryRef.current = textQuery;
         setSnap(0.5);
         setActiveSkillId(activeSkills[0].name || null);
       }
-    } else if (!debouncedSearch) {
+    } else if (!textQuery) {
       lastAutoOpenedQueryRef.current = "";
     }
-  }, [debouncedSearch, searchedData, setActiveSkillId, setSnap]);
+  }, [textQuery, searchedData, setActiveSkillId, setSnap]);
 
+  // Step 3: Filter to visible map bounds, apply active sort mode, and re-index currentRank (1, 2, 3...)
   const visibleData = useMemo(() => {
-    if (!visibleBounds) return searchedData;
-    return searchedData.filter((item: any) => {
-      if (item?.isDivider) return true;
-      if (!item?.parsedCoords) return true;
-      const [lat, lng] = item.parsedCoords;
-      const latOk = lat >= visibleBounds.south && lat <= visibleBounds.north;
-      let lngOk: boolean;
-      if (visibleBounds.west <= visibleBounds.east) {
-        lngOk = lng >= visibleBounds.west && lng <= visibleBounds.east;
-      } else {
-        lngOk = lng >= visibleBounds.west || lng <= visibleBounds.east;
-      }
-      // Add a small buffer to the bounds to ensure items near the edge are shown
-      return latOk && lngOk;
-    });
-  }, [searchedData, visibleBounds]);
+    const inBounds = !visibleBounds
+      ? searchedData
+      : searchedData.filter((item: any) => {
+          if (!item || item.isDivider) return false;
+          return isWithinBounds(item, visibleBounds);
+        });
+
+    const sorted = [...inBounds];
+    if (sortMode === "sends_asc") {
+      sorted.sort((a: any, b: any) => {
+        const sendsA = Number(a[runKey] || 0);
+        const sendsB = Number(b[runKey] || 0);
+        if (sendsA !== sendsB) return sendsA - sendsB;
+        const rA = Math.round(getSkillRating(a));
+        const rB = Math.round(getSkillRating(b));
+        return rA - rB;
+      });
+    } else if (sortMode === "easiest" || sortMode === "hardest") {
+      sorted.sort((a: any, b: any) => {
+        const rA = Math.round(getSkillRating(a));
+        const rB = Math.round(getSkillRating(b));
+        // Keep unrated (0) challenges at the bottom when sorting by easiest or hardest
+        if (rA <= 0 && rB > 0) return 1;
+        if (rB <= 0 && rA > 0) return -1;
+        if (rA !== rB) {
+          return sortMode === "easiest" ? rA - rB : rB - rA;
+        }
+        // Tiebreaker: most sends first
+        const sendsA = Number(a[runKey] || 0);
+        const sendsB = Number(b[runKey] || 0);
+        return sendsB - sendsA;
+      });
+    }
+
+    return sorted.map((item: any, idx: number) => ({
+      ...item,
+      currentRank: idx + 1,
+    }));
+  }, [searchedData, visibleBounds, isWithinBounds, sortMode, runKey]);
+
+  const hasVideosInView = useMemo(
+    () => visibleData.some((c: any) => !!(c?.videoUrl || c?.demoVideo)),
+    [visibleData]
+  );
 
   const handleItemClick = React.useCallback((c: SkillData) => {
     navigateToEntity("challenge", c);
@@ -140,10 +376,33 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
 
   const renderListContent = (currentSnap: number, scrollRef: React.RefObject<HTMLDivElement>, dRef: React.RefObject<any>) => {
     const skillCount = skillList ? skillList.filter((i: any) => !i.isDivider).length : 0;
-    
+    const isDark = theme === "dark";
+    const hasActiveFilter = activeRatingRanges.length > 0 || !!debouncedSearch;
+
+    const headerMiddleLabel = (
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="truncate">CHALLENGE</span>
+        {hasActiveFilter && (
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className={cn(
+              "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border transition-all active:scale-95 shrink-0",
+              isDark
+                ? "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                : "bg-black/10 border-black/20 text-zinc-950 hover:bg-black/20"
+            )}
+          >
+            <X size={9} strokeWidth={3} />
+            <span>RESET</span>
+          </button>
+        )}
+      </div>
+    );
+
     return (
     <div className="flex flex-col h-full bg-transparent">
-      <div className="px-4 pb-2 pt-2 shrink-0 pointer-events-auto">
+      <div className="px-4 pb-1 pt-2 shrink-0 pointer-events-auto flex flex-col gap-2">
         <ASRSearchInput
           value={search}
           onChange={(e: any) => setSearch(e.target.value)}
@@ -151,7 +410,52 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
           placeholder={`search ${skillCount} challenges...`}
           enableFocusShortcut="slash"
         />
+
+        {/* Slim Single-Line Difficulty Tier Pills (Multi-Select Capable) */}
+        <div className="grid grid-cols-5 gap-1.5 w-full">
+          {SKILL_RATING_TIERS.map((tier) => {
+            const isActive =
+              tier.id === "all"
+                ? activeRatingRanges.length === 0
+                : activeRatingRanges.some(
+                    r => r.min <= tier.min && r.max >= tier.max
+                  );
+            const count = viewportTierCounts[tier.id];
+
+            return (
+              <button
+                key={tier.id}
+                type="button"
+                onClick={() => setRatingFilter(tier.id)}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 py-1.5 px-1 rounded-full border transition-all active:scale-95 outline-none select-none",
+                  isActive
+                    ? isDark
+                      ? tier.activePillDarkCls
+                      : tier.activePillLightCls
+                    : isDark
+                      ? "bg-zinc-900/60 border-white/10 text-zinc-300 hover:bg-white/10 hover:border-white/20"
+                      : "bg-zinc-100/80 border-black/10 text-zinc-700 hover:bg-black/5 hover:border-black/20",
+                  count === 0 && !isActive && "opacity-30"
+                )}
+              >
+                {tier.id !== "all" && (
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      isActive && !isDark ? "bg-white" : tier.dotCls
+                    )}
+                  />
+                )}
+                <span className="text-[10px] sm:text-[11px] font-mono font-black tracking-tighter uppercase leading-none">
+                  {tier.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+
       <div 
         ref={scrollRef}
         onScroll={(e) => {
@@ -160,23 +464,68 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
             window.dispatchEvent(new CustomEvent("asr-scroll", { detail: { scrollTop: target.scrollTop } }));
           }
         }}
-        className="flex-1 px-4 pb-4 pt-0 overflow-y-auto overscroll-none"
+        className="flex-1 px-0 pb-4 pt-0 overflow-y-auto overscroll-none"
         style={{ touchAction: currentSnap >= 0.8 ? 'pan-y' : 'none' }}
       >
-        <ErrorBoundary fallbackMessage="Failed to render the data list.">
-          <ASRDataTable
-            ref={dRef}
-            scrollElementRef={scrollRef}
-            data={visibleData}
-            isLoading={isLoading}
-            viewType="card"
-            isCompact={true}
-            onItemClick={handleItemClick}
-            middleLabel="CHALLENGE"
-            columns={columns}
-            showVideoColumn={true}
-          />
-        </ErrorBoundary>
+        {visibleData.length === 0 && searchedData.length > 0 && !isLoading ? (
+          <div className="px-4">
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center text-center p-6 mt-4 rounded-2xl border gap-3",
+                isDark ? "bg-zinc-900/40 border-white/10" : "bg-white/60 border-black/10"
+              )}
+            >
+              <Compass className={cn("w-7 h-7 opacity-50", isDark ? "text-white" : "text-zinc-900")} />
+              <div className="flex flex-col gap-1">
+                <span className={cn("text-xs font-black uppercase tracking-widest", isDark ? "text-white" : "text-zinc-900")}>
+                  NO MATCHING CHALLENGES IN THIS MAP AREA
+                </span>
+                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                  {searchedData.length} MATCHING CHALLENGES EXIST GLOBALLY
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => mapRef.current?.fitToChallenges?.()}
+                  className={cn(
+                    "px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
+                    isDark ? "bg-white text-black hover:bg-zinc-200" : "bg-zinc-900 text-white hover:bg-zinc-800"
+                  )}
+                >
+                  ZOOM TO {searchedData.length} MATCHES
+                </button>
+                {hasActiveFilter && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className={cn(
+                      "px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all active:scale-95",
+                      isDark ? "border-white/20 text-white hover:bg-white/10" : "border-black/20 text-zinc-900 hover:bg-black/5"
+                    )}
+                  >
+                    SHOW ALL TIERS
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <ErrorBoundary fallbackMessage="Failed to render the data list.">
+            <ASRDataTable
+              ref={dRef}
+              scrollElementRef={scrollRef}
+              data={visibleData}
+              isLoading={isLoading}
+              viewType="card"
+              isCompact={true}
+              onItemClick={handleItemClick}
+              middleLabel={headerMiddleLabel}
+              columns={columns}
+              showVideoColumn={hasVideosInView}
+            />
+          </ErrorBoundary>
+        )}
       </div>
     </div>
     );
@@ -197,7 +546,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
             ref={mapRef}
             challenges={searchedData}
             totalSkills={skillList.filter((c: any) => c && !c.isDivider).length}
-            searchQuery={debouncedSearch}
+            searchQuery={textQuery}
             theme={theme}
             onSkillClick={handleItemClick}
             onPinClick={handlePinClick}
