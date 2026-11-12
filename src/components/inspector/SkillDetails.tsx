@@ -10,7 +10,6 @@ import {
   MapPin,
   Play,
   ArrowDown,
-  Check,
 } from "lucide-react";
 import {
   cn,
@@ -29,7 +28,6 @@ import { FallbackAvatar } from "../common/FallbackAvatar";
 import { ASRPromotionBanner } from "../common/ASRPromotionBanner";
 import { ASRRankList } from "../list/ASRRankList";
 import { ASRStandardButton } from "../common/ASRStandardButton";
-import { ASRBottomSheet } from "../common/ASRBottomSheet";
 import { ASRStatCard } from "../common/ASRStatCard";
 import { ASRWeeklyActivityChart } from "./ASRWeeklyActivityChart";
 
@@ -233,23 +231,18 @@ export const SkillDetails = React.memo(
     const [uiMode, setUiMode] = useState<"all-time" | "2026">(initialModeSafe);
     const [contentMode, setContentMode] = useState<"all-time" | "2026">(initialModeSafe);
 
-    const urlSort = searchParams.get("sort");
     const urlDir = searchParams.get("dir");
-    const validSorts = ["date", "player"];
     const validDirs = ["desc", "asc"];
-
-    const sortCategory = validSorts.includes(urlSort as string) ? (urlSort as "date" | "player") : "date";
     const sortDirection = validDirs.includes(urlDir as string) ? (urlDir as "desc" | "asc") : "asc";
 
-    const setSortState = (cat: string, dir: string) => {
+    const toggleSortDirection = () => {
+      const nextDir = sortDirection === "desc" ? "asc" : "desc";
       setSearchParams(prev => {
-        prev.set("sort", cat);
-        prev.set("dir", dir);
+        prev.delete("sort");
+        prev.set("dir", nextDir);
         return prev;
       }, { replace: true, state: location.state, preventScrollReset: true });
     };
-
-    const [isSortOpen, setIsSortOpen] = useState(false);
 
     const recordsM = contentMode === "all-time" 
       ? (dataContext.skillRecords_M_AT?.[cName] || [])
@@ -274,21 +267,15 @@ export const SkillDetails = React.memo(
         const aName = String(atMet[a.pKey]?.name || a.pKey || a.athlete || "").toUpperCase();
         const bName = String(atMet[b.pKey]?.name || b.pKey || b.athlete || "").toUpperCase();
 
-        if (sortCategory === "player") {
-          const primary = aName.localeCompare(bName);
-          if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
-          return aDate - bDate;
-        } else {
-          const primary = aDate - bDate;
-          if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
-          return aName.localeCompare(bName);
-        }
+        const primary = aDate - bDate;
+        if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
+        return aName.localeCompare(bName);
       });
       return sorted;
     };
 
-    const sortedRecordsM = useMemo(() => sortRecords(recordsM), [recordsM, sortCategory, sortDirection, atMet]);
-    const sortedRecordsF = useMemo(() => sortRecords(recordsF), [recordsF, sortCategory, sortDirection, atMet]);
+    const sortedRecordsM = useMemo(() => sortRecords(recordsM), [recordsM, sortDirection, atMet]);
+    const sortedRecordsF = useMemo(() => sortRecords(recordsF), [recordsF, sortDirection, atMet]);
 
     const atRecordsM = dataContext.skillRecords_M_AT?.[cName] || [];
     const atRecordsF = dataContext.skillRecords_F_AT?.[cName] || [];
@@ -542,26 +529,20 @@ export const SkillDetails = React.memo(
                   <div className="flex flex-col gap-6">
                     <div className="flex items-center justify-between">
                       <SectionTitle noPadding>VERIFIED SENDS</SectionTitle>
-                      <div
+                      <button
+                        type="button"
+                        onClick={toggleSortDirection}
                         className={cn(
-                          "flex items-center rounded-full border text-[10px] font-black uppercase tracking-widest",
+                          "flex items-center rounded-full border text-[10px] font-black uppercase tracking-widest hover:opacity-70 active:scale-95 transition-all",
                           theme === "dark" ? "border-white/10 bg-zinc-900/50" : "border-black/10 bg-zinc-100/50"
                         )}
                       >
-                        <button
-                          onClick={() => setIsSortOpen(true)}
-                          className="px-3 py-1.5 hover:opacity-70 transition-opacity uppercase"
-                        >
-                          {sortCategory}
-                        </button>
+                        <span className="px-3 py-1.5 uppercase">DATE</span>
                         <div className={cn("w-px h-3", theme === "dark" ? "bg-white/20" : "bg-black/20")} />
-                        <button
-                          onClick={() => setSortState(sortCategory, sortDirection === "desc" ? "asc" : "desc")}
-                          className="px-2 py-1.5 hover:opacity-70 transition-opacity flex items-center justify-center"
-                        >
+                        <span className="px-2 py-1.5 flex items-center justify-center">
                           <ArrowDown size={14} className={cn("transition-transform duration-200", sortDirection === "asc" ? "rotate-180" : "")} />
-                        </button>
-                      </div>
+                        </span>
+                      </button>
                     </div>
                     <ASRRankList
                       athletes={sortedRecordsM}
@@ -569,6 +550,7 @@ export const SkillDetails = React.memo(
                       onEntityClick={onEntityClick}
                       entityType="player"
                       showDateSubtitle={true}
+                      hideStats={true}
                       padTo={3}
                     />
                   </div>
@@ -621,26 +603,20 @@ export const SkillDetails = React.memo(
                   <div className="flex flex-col gap-6">
                     <div className="flex items-center justify-between">
                       <SectionTitle noPadding>VERIFIED SENDS</SectionTitle>
-                      <div
+                      <button
+                        type="button"
+                        onClick={toggleSortDirection}
                         className={cn(
-                          "flex items-center rounded-full border text-[10px] font-black uppercase tracking-widest",
+                          "flex items-center rounded-full border text-[10px] font-black uppercase tracking-widest hover:opacity-70 active:scale-95 transition-all",
                           theme === "dark" ? "border-white/10 bg-zinc-900/50" : "border-black/10 bg-zinc-100/50"
                         )}
                       >
-                        <button
-                          onClick={() => setIsSortOpen(true)}
-                          className="px-3 py-1.5 hover:opacity-70 transition-opacity uppercase"
-                        >
-                          {sortCategory}
-                        </button>
+                        <span className="px-3 py-1.5 uppercase">DATE</span>
                         <div className={cn("w-px h-3", theme === "dark" ? "bg-white/20" : "bg-black/20")} />
-                        <button
-                          onClick={() => setSortState(sortCategory, sortDirection === "desc" ? "asc" : "desc")}
-                          className="px-2 py-1.5 hover:opacity-70 transition-opacity flex items-center justify-center"
-                        >
+                        <span className="px-2 py-1.5 flex items-center justify-center">
                           <ArrowDown size={14} className={cn("transition-transform duration-200", sortDirection === "asc" ? "rotate-180" : "")} />
-                        </button>
-                      </div>
+                        </span>
+                      </button>
                     </div>
                     <ASRRankList
                       athletes={sortedRecordsF}
@@ -648,6 +624,7 @@ export const SkillDetails = React.memo(
                       onEntityClick={onEntityClick}
                       entityType="player"
                       showDateSubtitle={true}
+                      hideStats={true}
                       padTo={3}
                     />
                   </div>
@@ -766,53 +743,6 @@ export const SkillDetails = React.memo(
             </InspectorTabContainer>
           )}
         </div>
-
-        {isSortOpen && (
-          <ASRBottomSheet
-            snapPoints={[0, 0.55]}
-            activeSnap={isSortOpen ? 0.55 : 0}
-            onSnapChange={(snap) => {
-              if (snap === 0) setIsSortOpen(false);
-            }}
-          >
-            <div className="flex flex-col px-6 py-4 pb-12 gap-1.5">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-3 pl-1">
-                SORT SENDS
-              </h3>
-              {[
-                { id: "date", label: "DATE" },
-                { id: "player", label: "PLAYER" },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    const nextDir = "asc";
-                    setSortState(opt.id, nextDir);
-                    setIsSortOpen(false);
-                  }}
-                  className={cn(
-                    "flex items-center justify-between w-full p-4 rounded-xl transition-all outline-none focus-visible:ring-2",
-                    sortCategory === opt.id
-                      ? (theme === "dark" ? "bg-white/10" : "bg-black/5")
-                      : "hover:bg-zinc-500/10"
-                  )}
-                >
-                  <span className={cn(
-                    "text-sm font-black uppercase tracking-widest",
-                    sortCategory === opt.id
-                      ? (theme === "dark" ? "text-white" : "text-black")
-                      : "text-zinc-500"
-                  )}>
-                    {opt.label}
-                  </span>
-                  {sortCategory === opt.id && (
-                    <Check size={18} className={theme === "dark" ? "text-white" : "text-black"} />
-                  )}
-                </button>
-              ))}
-            </div>
-          </ASRBottomSheet>
-        )}
       </div>
     );
   },

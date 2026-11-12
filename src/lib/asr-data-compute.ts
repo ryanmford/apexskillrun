@@ -717,10 +717,11 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
         
         const send = runsForSkill.find(r => r.pKey === pKey && Math.abs((r.time as number) - num) < 0.001);
         
+        const skillPoints = Number((cMet?.[cName] as any)?.points) || 0;
         return {
           pKey,
           time: num,
-          pts: num > 0 ? (record / num) * 100 : 0,
+          pts: skillPoints,
           videoUrl: (rawBestSector?.[pKey] as Record<string, Record<string, { videoUrl?: string }>>)?.[cName]?.videoUrl,
           date: send?.date,
           isInterim,

@@ -33,6 +33,7 @@ interface ASRRankListProps {
   entityType?: "player" | "setter" | "challenge" | "team" | "region";
   padTo?: number;
   isCompact?: boolean;
+  hideStats?: boolean;
   scrollElementRef?: React.RefObject<HTMLElement | null>;
 }
 
@@ -50,6 +51,7 @@ export const ASRRankList = ({
   entityType,
   padTo = 0,
   isCompact = true,
+  hideStats = false,
   scrollElementRef,
 }: ASRRankListProps) => {
   const theme = useContext(ThemeContext);
@@ -268,46 +270,48 @@ export const ASRRankList = ({
               const stats = [];
               const isUnclaimedItem = item.isUnclaimed;
 
-              if (isUnclaimedItem) {
-                stats.push({ value: "---", label: "PTS" });
-              } else if (
-                !isArray &&
-                points !== undefined &&
-                time !== undefined
-              ) {
-                stats.push({
-                  value: Math.round(cleanNumeric(points) || 0).toLocaleString(),
-                  label: "PTS",
-                });
-              } else {
-                const value = isArray
-                  ? item[1]
-                  : (item.pts ??
-                    item.points ??
-                    item.value ??
-                    item.impact ??
-                    item.sends ??
-                    item.num);
-                const isWholeNumber = [
-                  "IMPACT",
-                  "SETS",
-                  "RANK",
-                  "SENDS",
-                  "PTS",
-                  "POINTS",
-                ].includes(String(valueLabel || "").toUpperCase());
-                stats.push({
-                  value:
-                    typeof value === "number"
-                      ? isWholeNumber
-                        ? Math.round(value).toLocaleString()
-                        : value.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                      : value || "--",
-                  label: valueLabel,
-                });
+              if (!hideStats) {
+                if (isUnclaimedItem) {
+                  stats.push({ value: "---", label: "PTS" });
+                } else if (
+                  !isArray &&
+                  points !== undefined &&
+                  time !== undefined
+                ) {
+                  stats.push({
+                    value: Math.round(cleanNumeric(points) || 0).toLocaleString(),
+                    label: "PTS",
+                  });
+                } else {
+                  const value = isArray
+                    ? item[1]
+                    : (item.pts ??
+                      item.points ??
+                      item.value ??
+                      item.impact ??
+                      item.sends ??
+                      item.num);
+                  const isWholeNumber = [
+                    "IMPACT",
+                    "SETS",
+                    "RANK",
+                    "SENDS",
+                    "PTS",
+                    "POINTS",
+                  ].includes(String(valueLabel || "").toUpperCase());
+                  stats.push({
+                    value:
+                      typeof value === "number"
+                        ? isWholeNumber
+                          ? Math.round(value).toLocaleString()
+                          : value.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                        : value || "--",
+                    label: valueLabel,
+                  });
+                }
               }
 
               const skillMeta =

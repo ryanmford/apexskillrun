@@ -11,7 +11,6 @@ import {
   X,
   MapPin,
   ArrowDown,
-  Check,
 } from "lucide-react";
 import {
   cn,
@@ -22,7 +21,6 @@ import {
 } from "../../lib/asr-utils";
 import { parseSafeDate } from "../../lib/asr-data";
 import { ASRStatCard } from "../common/ASRStatCard";
-import { ASRBottomSheet } from "../common/ASRBottomSheet";
 import { BioRow } from "./BioComponents";
 import { ASRNeonToggle } from "../common/ASRNeonToggle";
 import { FallbackAvatar } from "../common/FallbackAvatar";
@@ -88,10 +86,10 @@ export const PlayerDetails = React.memo(
 
     const urlSort = searchParams.get("sort");
     const urlDir = searchParams.get("dir");
-    const validSorts = ["points", "date", "name"];
+    const validSorts = ["points", "date"];
     const validDirs = ["desc", "asc"];
 
-    const sortCategory = validSorts.includes(urlSort as string) ? (urlSort as "points" | "date" | "name") : "points";
+    const sortCategory = validSorts.includes(urlSort as string) ? (urlSort as "points" | "date") : "points";
     const sortDirection = validDirs.includes(urlDir as string) ? (urlDir as "desc" | "asc") : "desc";
 
     const setSortState = (cat: string, dir: string) => {
@@ -102,7 +100,6 @@ export const PlayerDetails = React.memo(
       }, { replace: true, state: location.state, preventScrollReset: true });
     };
 
-    const [isSortOpen, setIsSortOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState<{ type: string; item: unknown } | null>(null);
 
     const randomRunsPromo = useMemo(() => {
@@ -164,17 +161,11 @@ export const PlayerDetails = React.memo(
       sorted.sort((a: any, b: any) => {
         const aDate = a.date ? (parseSafeDate(a.date)?.getTime() || 0) : 0;
         const bDate = b.date ? (parseSafeDate(b.date)?.getTime() || 0) : 0;
-        const aName = String(a.label || a.name || a.pKey || "").toUpperCase();
-        const bName = String(b.label || b.name || b.pKey || "").toUpperCase();
         const aPts = Number(a.pts ?? a.points ?? 0);
         const bPts = Number(b.pts ?? b.points ?? 0);
 
         if (sortCategory === "date") {
           const primary = aDate - bDate;
-          if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
-          return bPts - aPts;
-        } else if (sortCategory === "name") {
-          const primary = aName.localeCompare(bName);
           if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
           return bPts - aPts;
         } else {
@@ -362,15 +353,17 @@ export const PlayerDetails = React.memo(
                     )}
                   >
                     <button
-                      onClick={() => setIsSortOpen(true)}
-                      className="px-3 py-1.5 hover:opacity-70 transition-opacity uppercase"
+                      type="button"
+                      onClick={() => setSortState(sortCategory === "points" ? "date" : "points", "desc")}
+                      className="px-3 py-1.5 hover:opacity-70 active:scale-95 transition-all uppercase"
                     >
-                      {sortCategory === "name" ? "CHALLENGE" : sortCategory}
+                      {sortCategory}
                     </button>
                     <div className={cn("w-px h-3", theme === "dark" ? "bg-white/20" : "bg-black/20")} />
                     <button
+                      type="button"
                       onClick={() => setSortState(sortCategory, sortDirection === "desc" ? "asc" : "desc")}
-                      className="px-2 py-1.5 hover:opacity-70 transition-opacity flex items-center justify-center"
+                      className="px-2 py-1.5 hover:opacity-70 active:scale-95 transition-all flex items-center justify-center"
                     >
                       <ArrowDown size={14} className={cn("transition-transform duration-200", sortDirection === "asc" ? "rotate-180" : "")} />
                     </button>
@@ -696,54 +689,6 @@ export const PlayerDetails = React.memo(
             </motion.div>
           )}
         </AnimatePresence>
-
-        {isSortOpen && (
-          <ASRBottomSheet
-            snapPoints={[0, 0.55]}
-            activeSnap={isSortOpen ? 0.55 : 0}
-            onSnapChange={(snap) => {
-              if (snap === 0) setIsSortOpen(false);
-            }}
-          >
-            <div className="flex flex-col px-6 py-4 pb-12 gap-1.5">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-3 pl-1">
-                SORT SENDS
-              </h3>
-              {[
-                { id: "points", label: "POINTS" },
-                { id: "date", label: "DATE" },
-                { id: "name", label: "CHALLENGE" },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    const nextDir = opt.id === "name" ? "asc" : "desc";
-                    setSortState(opt.id, nextDir);
-                    setIsSortOpen(false);
-                  }}
-                  className={cn(
-                    "flex items-center justify-between w-full p-4 rounded-xl transition-all outline-none focus-visible:ring-2",
-                    sortCategory === opt.id
-                      ? (theme === "dark" ? "bg-white/10" : "bg-black/5")
-                      : "hover:bg-zinc-500/10"
-                  )}
-                >
-                  <span className={cn(
-                    "text-sm font-black uppercase tracking-widest",
-                    sortCategory === opt.id
-                      ? (theme === "dark" ? "text-white" : "text-black")
-                      : "text-zinc-500"
-                  )}>
-                    {opt.label}
-                  </span>
-                  {sortCategory === opt.id && (
-                    <Check size={18} className={theme === "dark" ? "text-white" : "text-black"} />
-                  )}
-                </button>
-              ))}
-            </div>
-          </ASRBottomSheet>
-        )}
       </div>
     );
   },
