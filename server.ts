@@ -483,6 +483,14 @@ async function startServer() {
   });
 
 
+  const STATIC_ASSET_REGEX = /\.(png|jpe?g|gif|webp|avif|svg|ico|css|js|mjs|map|woff2?|ttf|eot|mp4|webm|mov|m4v|mp3|wav|pdf|txt|xml|webmanifest)$/i;
+  const escapeHtmlAttr = (str: string) =>
+    String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -491,8 +499,8 @@ async function startServer() {
     app.use(vite.middlewares);
 
     app.get('*', async (req, res, next) => {
-      // Prevent returning HTML for missing static files (images, css, js)
-      if (req.path.match(/\.(png|jpe?g|gif|svg|ico|css|js|map|woff2?|ttf|eot)$/i)) {
+      // Prevent returning HTML for missing static files (images, video, css, js)
+      if (STATIC_ASSET_REGEX.test(req.path)) {
         return res.status(404).end();
       }
       try {
@@ -502,21 +510,24 @@ async function startServer() {
         
         const searchParams = new URLSearchParams(req.query as any);
         const meta = await getPageMeta(req.path, searchParams);
+        const safeTitle = escapeHtmlAttr(meta.title);
+        const safeDesc = escapeHtmlAttr(meta.description);
         
         const baseUrl = req.headers.host && req.headers.host.includes('localhost') ? 'http://localhost:3000' : 'https://' + (req.headers['x-forwarded-host'] || req.headers.host || 'apexskillrun.com');
-        const currentUrl = `${baseUrl}${req.originalUrl}`;
+        const currentUrl = escapeHtmlAttr(`${baseUrl}${req.originalUrl}`);
         const ogImageUrl = `${baseUrl}/api/og.png?path=${encodeURIComponent(req.path)}&query=${encodeURIComponent(searchParams.toString())}`;
-        const escapedOgImageUrl = ogImageUrl.replace(/&/g, '&amp;');
+        const escapedOgImageUrl = escapeHtmlAttr(ogImageUrl);
         template = template
-          .replace(/<title>.*?<\/title>/s, `<title>${meta.title}</title>`)
-          .replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${meta.description}">`)
-          .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${meta.title}">`)
-          .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${meta.description}">`)
+          .replace(/<title>.*?<\/title>/s, `<title>${safeTitle}</title>`)
+          .replace(/<meta name="title"[^>]*>/i, `<meta name="title" content="${safeTitle}">`)
+          .replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${safeDesc}">`)
+          .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${safeTitle}">`)
+          .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${safeDesc}">`)
           .replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${currentUrl}">`)
           .replace(/<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${escapedOgImageUrl}">`)
-          .replace(/<meta name="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${meta.title}">`)
-          .replace(/<meta name="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${meta.description}">`)
-          .replace(/<meta name="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${escapedOgImageUrl}">`);
+          .replace(/<meta (?:name|property)="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${safeTitle}">`)
+          .replace(/<meta (?:name|property)="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${safeDesc}">`)
+          .replace(/<meta (?:name|property)="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${escapedOgImageUrl}">`);
           
         if (meta.initialData) {
           template = template.replace('</head>', `
@@ -538,29 +549,32 @@ async function startServer() {
     app.use(express.static(distPath, { index: false })); // Disable index fallback from static
     
     app.get('*', async (req, res, next) => {
-      // Prevent returning HTML for missing static files (images, css, js)
-      if (req.path.match(/\.(png|jpe?g|gif|svg|ico|css|js|map|woff2?|ttf|eot)$/i)) {
+      // Prevent returning HTML for missing static files (images, video, css, js)
+      if (STATIC_ASSET_REGEX.test(req.path)) {
         return res.status(404).end();
       }
       try {
         let template = await fs.readFile(path.join(distPath, 'index.html'), 'utf-8');
         const searchParams = new URLSearchParams(req.query as any);
         const meta = await getPageMeta(req.path, searchParams);
+        const safeTitle = escapeHtmlAttr(meta.title);
+        const safeDesc = escapeHtmlAttr(meta.description);
         
         const baseUrl = req.headers.host && req.headers.host.includes('localhost') ? 'http://localhost:3000' : 'https://' + (req.headers['x-forwarded-host'] || req.headers.host || 'apexskillrun.com');
-        const currentUrl = `${baseUrl}${req.originalUrl}`;
+        const currentUrl = escapeHtmlAttr(`${baseUrl}${req.originalUrl}`);
         const ogImageUrl = `${baseUrl}/api/og.png?path=${encodeURIComponent(req.path)}&query=${encodeURIComponent(searchParams.toString())}`;
-        const escapedOgImageUrl = ogImageUrl.replace(/&/g, '&amp;');
+        const escapedOgImageUrl = escapeHtmlAttr(ogImageUrl);
         template = template
-          .replace(/<title>.*?<\/title>/s, `<title>${meta.title}</title>`)
-          .replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${meta.description}">`)
-          .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${meta.title}">`)
-          .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${meta.description}">`)
+          .replace(/<title>.*?<\/title>/s, `<title>${safeTitle}</title>`)
+          .replace(/<meta name="title"[^>]*>/i, `<meta name="title" content="${safeTitle}">`)
+          .replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${safeDesc}">`)
+          .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${safeTitle}">`)
+          .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${safeDesc}">`)
           .replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${currentUrl}">`)
           .replace(/<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${escapedOgImageUrl}">`)
-          .replace(/<meta name="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${meta.title}">`)
-          .replace(/<meta name="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${meta.description}">`)
-          .replace(/<meta name="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${escapedOgImageUrl}">`);
+          .replace(/<meta (?:name|property)="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${safeTitle}">`)
+          .replace(/<meta (?:name|property)="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${safeDesc}">`)
+          .replace(/<meta (?:name|property)="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${escapedOgImageUrl}">`);
           
         if (meta.initialData) {
           template = template.replace('</head>', `

@@ -13,6 +13,8 @@ if (typeof Worker !== "undefined") {
   });
 }
 
+let latestComputeReqId = 0;
+
 export const useFetchASRData = () => {
   const setData = useDataStore((s) => s.setData);
   const setFetchStatus = useDataStore((s) => s.setFetchStatus);
@@ -67,27 +69,40 @@ export const useFetchASRData = () => {
             const rawCached = await localforage.getItem(RAW_CSV_KEY) as Record<string, string>;
             if (rawCached && rawCached.rM && rawCached.rF && rawCached.rLive && dataWorker) {
               restored = await new Promise<boolean>((resolve) => {
+                const cacheReqId = ++latestComputeReqId;
+                let settled = false;
+                const finish = (val: boolean) => {
+                  if (settled) return;
+                  settled = true;
+                  clearTimeout(timeoutId);
+                  dataWorker?.removeEventListener("message", handleCacheWorkerMessage);
+                  resolve(val);
+                };
                 const handleCacheWorkerMessage = (e: MessageEvent) => {
-                  if (e.data.type === "COMPUTE_ALL_READY") {
-                    const resultingData = e.data.payload;
-                    setData({
-                      ...resultingData,
-                      isLoading: false,
-                    });
-                    dataWorker?.removeEventListener("message", handleCacheWorkerMessage);
-                    resolve(true);
+                  if (
+                    e.data.type === "COMPUTE_ALL_READY" &&
+                    e.data.requestId === cacheReqId
+                  ) {
+                    // Only apply cached computation if no newer live computation superseded it
+                    if (cacheReqId === latestComputeReqId) {
+                      const resultingData = e.data.payload;
+                      setData({
+                        ...resultingData,
+                        isLoading: false,
+                      });
+                    }
+                    finish(true);
                   }
                 };
+                const timeoutId = setTimeout(() => {
+                  finish(false);
+                }, 5000);
                 dataWorker?.addEventListener("message", handleCacheWorkerMessage);
                 dataWorker?.postMessage({
                   type: "PROCESS_AND_COMPUTE",
+                  requestId: cacheReqId,
                   payload: { ...rawCached, hasTotalError: false, hasPartialError: false },
                 });
-                // Safe resolution failover
-                setTimeout(() => {
-                  dataWorker?.removeEventListener("message", handleCacheWorkerMessage);
-                  resolve(false);
-                }, 5000);
               });
             }
           } catch (e) {
@@ -155,15 +170,22 @@ export const useFetchASRData = () => {
 
         // Spin up the worker to do heavy lifting mapping
         if (dataWorker) {
+          const liveReqId = ++latestComputeReqId;
           const handleLiveMapping = async (e: MessageEvent) => {
-            if (e.data.type === "COMPUTE_ALL_READY") {
+            if (
+              e.data.type === "COMPUTE_ALL_READY" &&
+              e.data.requestId === liveReqId
+            ) {
+              dataWorker?.removeEventListener("message", handleLiveMapping);
+              // Ignore if an even newer refresh superseded this worker job
+              if (liveReqId !== latestComputeReqId) return;
+
               const resultingData = e.data.payload;
               setData({
                 ...resultingData,
                 isLoading: false,
               });
               setFetchStatus({ isSyncing: false });
-              dataWorker?.removeEventListener("message", handleLiveMapping);
               
               try {
                 await localforage.setItem(CONFIG.SNAPSHOT_KEY, resultingData);
@@ -177,6 +199,7 @@ export const useFetchASRData = () => {
 
           dataWorker.postMessage({
             type: "PROCESS_AND_COMPUTE",
+            requestId: liveReqId,
             payload: { rM, rF, rLive, rSet, hasTotalError, hasPartialError },
           });
         }

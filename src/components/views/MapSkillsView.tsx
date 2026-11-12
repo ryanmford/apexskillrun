@@ -455,6 +455,11 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
 
       <div 
         ref={scrollRef}
+        onPointerDown={(e) => {
+          if (currentSnap >= 0.5) {
+            e.stopPropagation();
+          }
+        }}
         onScroll={(e) => {
           if (window.innerWidth < 768) {
             const target = e.target as HTMLDivElement;
@@ -462,7 +467,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
           }
         }}
         className="flex-1 px-0 pb-4 pt-0 overflow-y-auto overscroll-none"
-        style={{ touchAction: currentSnap >= 0.8 ? 'pan-y' : 'none' }}
+        style={{ touchAction: currentSnap >= 0.5 ? 'pan-y' : 'none' }}
       >
         {visibleData.length === 0 && searchedData.length > 0 && !isLoading ? (
           <div className="px-4">

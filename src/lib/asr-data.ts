@@ -49,17 +49,20 @@ const RANKING_MAPPING = {
   flag: ["flag"],
   rating: ["ovr", "overall", "rating"],
   pts: ["pts", "points", "asr"],
-  sends: ["sends", "totalruns", "total", "#", "runs"],
+  sends: ["sends", "total sends", "total runs", "totalruns", "runs"],
   sets: ["sets", "total sets"],
   contribution: ["🪙", "contribution"],
   fire: ["🔥", "fire"],
   ig: ["ig", "instagram", "social"],
   avg: ["avg time", "average", "avg"],
   cert: ["cert", "level", "certification"],
-  location: ["location", "city", "region", "hometown", "home town"],
-  homeGym: ["gym", "home gym"],
+  location: ["hometown", "home town", "town", "city", "location"],
+  townFlag: ["town flag", "hometown flag", "city flag"],
+  homeGym: ["home gym", "homegym", "gym"],
+  teamLocation: ["gym location", "home gym location", "team location"],
+  gymFlag: ["gym flag", "home gym flag"],
   shoe: ["shoe", "shoes", "footwear"],
-  shoeSize: ["size", "shoe size"],
+  shoeSize: ["shoe size", "size"],
 };
 
 const SET_LIST_MAPPING = {
@@ -68,16 +71,16 @@ const SET_LIST_MAPPING = {
   elev: ["elev", "gain", "elevation"],
   rating: ["rating", "diff", "difficulty", "points"],
   type: ["type", "style"],
-  city: ["city", "location"],
+  city: ["city", "town", "location"],
   country: ["country", "nation"],
   flag: ["flag", "emoji"],
   dateSet: ["set on", "updated", "date set"],
   demo: ["demo", "rules", "video", "url"],
-  coverImage: ["img", "pic", "photo", "cover", "image", "coverimage"],
-  coords: ["coord", "gps", "location", "pin"],
+  coverImage: ["coverimage", "cover", "img", "pic", "photo", "image"],
+  coords: ["coordinates", "coord", "gps", "pin"],
   state: ["state", "prov", "region"],
-  leads: ["lead", "lead setter", "leads", "leadsetters"],
-  assists: ["assistant", "assistants", "assistant setter", "assistantsetters"],
+  leads: ["lead setter", "leadsetters", "leads", "lead"],
+  assists: ["assistant setter", "assistantsetters", "assistants", "assistant"],
   isOpen: ["open?"],
   is2026: ["2026?"],
   isAllTime: ["all-time?"],
@@ -87,17 +90,52 @@ const SET_LIST_MAPPING = {
 };
 
 const SETTER_MAPPING = {
-  name: ["setter", "name"],
+  name: ["setter", "athlete", "name"],
   leads: ["leads"],
   assists: ["assist", "assists", "assistant"],
   sets: ["sets", "total sets"],
   country: ["country", "nation"],
-  flag: ["flag", "emoji", "region"],
+  flag: ["flag", "emoji"],
   ig: ["ig", "instagram"],
   contribution: ["🪙", "contribution"],
   cert: ["cert", "level", "certification"],
-  location: ["location", "city"],
-  homeGym: ["gym", "home gym"],
+  location: ["hometown", "home town", "town", "city", "location"],
+  townFlag: ["town flag", "hometown flag", "city flag"],
+  homeGym: ["home gym", "homegym", "gym"],
+  gymFlag: ["gym flag", "home gym flag"],
+};
+
+const extractTeamsFromRow = (
+  vals: Record<string, any>,
+  shoeField?: string,
+): TeamProfile[] => {
+  const pTeams: TeamProfile[] = [];
+  const raw: string[] | undefined = vals.__raw;
+  const headers: string[] | undefined = vals.__headers;
+  if (!raw) return pTeams;
+
+  // Prefer header-located team columns ("team 1", "team 2", "team 3") if present, else fallback to indices 23, 26, 29
+  const teamStartIndices: number[] = [];
+  if (headers && headers.length > 0) {
+    headers.forEach((h, idx) => {
+      if (/^team\s*[1-9]\b|^team$/i.test(h) && !h.includes("location") && !h.includes("flag")) {
+        teamStartIndices.push(idx);
+      }
+    });
+  }
+  const slots = teamStartIndices.length > 0 ? teamStartIndices : [23, 26, 29];
+  for (const j of slots) {
+    if (j >= raw.length) continue;
+    const tName = (raw[j] || "").trim();
+    if (tName && tName.toUpperCase() !== "UNAFFILIATED" && !isFootwearTeam(tName, shoeField)) {
+      pTeams.push({
+        name: tName,
+        location: (raw[j + 1] || "").trim(),
+        flag: (raw[j + 2] || "").trim(),
+      } as TeamProfile);
+    }
+  }
+  return pTeams;
 };
 
 const LIVE_FEED_MAPPING = {
@@ -128,32 +166,24 @@ export const processRankingData = (csv: string, gender: string) => {
         .trim();
 
       const pLocation =
-        (vals.__raw ? vals.__raw[18] || "" : vals.location || "").trim() ||
+        (vals.location ?? (vals.__raw ? vals.__raw[18] : "") ?? "").trim() ||
         CONFIG.FALLBACKS.UNKNOWN_LOCATION;
       const pHomeGym =
-        (vals.__raw ? vals.__raw[20] || "" : vals.homeGym || "").trim() ||
+        (vals.homeGym ?? (vals.__raw ? vals.__raw[20] : "") ?? "").trim() ||
         CONFIG.FALLBACKS.UNAFFILIATED;
-      const pTeamLocation = (vals.__raw ? vals.__raw[21] || "" : "").trim();
+      const pTeamLocation = (
+        vals.teamLocation ?? (vals.__raw ? vals.__raw[21] : "") ?? ""
+      ).trim();
 
-      const pTeams: TeamProfile[] = [];
       const shoeField = (vals.shoe || "").trim();
-      if (vals.__raw) {
-        // Check for team slots: (X,Y,Z), (AA,AB,AC), (AD,AE,AF)
-        for (let j = 23; j <= 31; j += 3) {
-          const tName = (vals.__raw[j] || "").trim();
-          if (tName && tName.toUpperCase() !== "UNAFFILIATED" && !isFootwearTeam(tName, shoeField)) {
-            pTeams.push({
-              name: tName,
-              location: (vals.__raw[j + 1] || "").trim(),
-              flag: (vals.__raw[j + 2] || "").trim(),
-            } as TeamProfile);
+      const pTeams: TeamProfile[] = extractTeamsFromRow(vals, shoeField);
 
-          }
-        }
-      }
-
-      const townFlagRaw = (vals.__raw ? vals.__raw[19] || "" : "").trim();
-      const gymFlagRaw = (vals.__raw ? vals.__raw[22] || "" : "").trim();
+      const townFlagRaw = (
+        vals.townFlag ?? (vals.__raw ? vals.__raw[19] : "") ?? ""
+      ).trim();
+      const gymFlagRaw = (
+        vals.gymFlag ?? (vals.__raw ? vals.__raw[22] : "") ?? ""
+      ).trim();
       const townEntity = fixCountryEntity("", townFlagRaw);
       const gymEntity = fixCountryEntity("", gymFlagRaw);
 
@@ -258,31 +288,22 @@ export const processSettersData = (csv: string) => {
       const fixed = fixCountryEntity(vals.country, vals.flag);
 
       const pLocation =
-        (vals.__raw ? vals.__raw[18] || "" : vals.location || "").trim() ||
+        (vals.location ?? (vals.__raw ? vals.__raw[18] : "") ?? "").trim() ||
         CONFIG.FALLBACKS.UNKNOWN_LOCATION;
       const pHomeGym =
-        (vals.__raw ? vals.__raw[20] || "" : vals.homeGym || "").trim() ||
+        (vals.homeGym ?? (vals.__raw ? vals.__raw[20] : "") ?? "").trim() ||
         CONFIG.FALLBACKS.UNAFFILIATED;
 
-      const townFlagRaw = (vals.__raw ? vals.__raw[19] || "" : "").trim();
-      const gymFlagRaw = (vals.__raw ? vals.__raw[22] || "" : "").trim();
+      const townFlagRaw = (
+        vals.townFlag ?? (vals.__raw ? vals.__raw[19] : "") ?? ""
+      ).trim();
+      const gymFlagRaw = (
+        vals.gymFlag ?? (vals.__raw ? vals.__raw[22] : "") ?? ""
+      ).trim();
       const townEntity = fixCountryEntity("", townFlagRaw);
       const gymEntity = fixCountryEntity("", gymFlagRaw);
 
-      const pTeams: TeamProfile[] = [];
-      if (vals.__raw) {
-        for (let j = 23; j <= 31; j += 3) {
-          const tName = (vals.__raw[j] || "").trim();
-          if (tName && tName.toUpperCase() !== "UNAFFILIATED" && !isFootwearTeam(tName)) {
-            pTeams.push({
-              name: tName,
-              location: (vals.__raw[j + 1] || "").trim(),
-              flag: (vals.__raw[j + 2] || "").trim(),
-            } as TeamProfile);
-
-          }
-        }
-      }
+      const pTeams: TeamProfile[] = extractTeamsFromRow(vals);
 
       const teamNamesStr = pTeams.map((t) => t.name).join(" ");
       return {
@@ -360,9 +381,11 @@ export const processLiveFeedData = (
   const season26AthleteBestTimes: Record<string, Record<string, { label: string; value: string; num: number; videoUrl: string; date: string | null }>> = {};
   const season26AthleteLeaderboards: Record<string, Record<string, Record<string, number>>> = { M: {}, F: {} };
   const season26AthleteTotalSubmissions: Record<string, number> = {};
-        const athleteDisplayNameMap: Record<string, string> = {};
+  const athleteDisplayNameMap: Record<string, string> = {};
   const filmerCreditsCount: Record<string, number> = {};
   const skillRunsHistory: Record<string, unknown[]> = {};
+  const openRunsHistory: Record<string, unknown[]> = {};
+  const season26RunsHistory: Record<string, unknown[]> = {};
 
   dataRows.forEach((vals) => {
     const pName = (vals.athlete || "").trim();
@@ -384,6 +407,7 @@ export const processLiveFeedData = (
 
     const normC = rawSkill.toUpperCase();
     const isSkillOpen = skillSetMap[normC]?.isOpenSkill;
+    const isSkill2026 = skillSetMap[normC] ? Boolean(skillSetMap[normC].is2026Skill) : true;
 
     const isPlaceholder = isPlaceholderPlayer(pName);
 
@@ -465,6 +489,11 @@ export const processLiveFeedData = (
 
     if ((isASROpenTag || isInOpenWindow) && isSkillOpen) {
       if (!isPlaceholder) {
+        if (!openRunsHistory[normC]) openRunsHistory[normC] = [];
+        openRunsHistory[normC].push({
+          pKey,
+          date: vals.date ? parseSafeDate(vals.date)?.toISOString() || null : null,
+        });
         if (!openAthleteBestTimes[pKey]) openAthleteBestTimes[pKey] = {};
         if (
           !openAthleteBestTimes[pKey][normC] ||
@@ -504,8 +533,13 @@ export const processLiveFeedData = (
         }
     }
 
-    if (is2026) {
+    if (is2026 && isSkill2026) {
       if (!isPlaceholder) {
+        if (!season26RunsHistory[normC]) season26RunsHistory[normC] = [];
+        season26RunsHistory[normC].push({
+          pKey,
+          date: vals.date ? parseSafeDate(vals.date)?.toISOString() || null : null,
+        });
         if (!season26AthleteBestTimes[pKey]) season26AthleteBestTimes[pKey] = {};
         if (
           !season26AthleteBestTimes[pKey][normC] ||
@@ -554,17 +588,29 @@ export const processLiveFeedData = (
               : allTimeBoard;
             const vals = Object.values(allTimeBoard) as number[];
             const record = vals.length ? Math.min(...vals) : 0;
+            const getEntryDateMs = (athleteKey: string) => {
+              const dStr = source[athleteKey]?.[normL]?.date || allTimeAthleteBestTimes[athleteKey]?.[normL]?.date;
+              return dStr ? (parseSafeDate(dStr)?.getTime() ?? Infinity) : Infinity;
+            };
             const sorted = Object.entries(contextBoard).sort(
-              (a: [string, unknown], b: [string, unknown]) => (a[1] as number) - (b[1] as number),
+              (a: [string, unknown], b: [string, unknown]) => {
+                const aInterim = isPlaceholderPlayer(a[0]);
+                const bInterim = isPlaceholderPlayer(b[0]);
+                if (aInterim && !bInterim) return -1;
+                if (!aInterim && bInterim) return 1;
+                const dDiff = getEntryDateMs(a[0]) - getEntryDateMs(b[0]);
+                if (dDiff !== 0) return dDiff;
+                return a[0].localeCompare(b[0]);
+              },
             );
             let currentRank = 1;
-            let prevTime = -1;
+            let prevDateMs = -1;
             const rankMap = new Map<string, number>();
             sorted.forEach((e, idx) => {
-              const time = e[1] as number;
-              if (time !== prevTime) {
+              const dateMs = getEntryDateMs(e[0]);
+              if (idx === 0 || dateMs !== prevDateMs) {
                 currentRank = idx + 1;
-                prevTime = time;
+                prevDateMs = dateMs;
               }
               rankMap.set(e[0], currentRank);
             });
@@ -659,18 +705,40 @@ export const processLiveFeedData = (
     };
   });
 
-  const athleteFirstSendsMap: Record<string, number> = {};
-  Object.keys(skillRunsHistory).forEach((normC) => {
-    const runs = skillRunsHistory[normC].filter(r => parseSafeDate((r as any).date));
-    if (runs.length > 0) {
-      runs.sort((a, b) => (parseSafeDate((a as any).date)?.getTime() || 0) - (parseSafeDate((b as any).date)?.getTime() || 0));
-      const firstDate = parseSafeDate((runs[0] as any).date)?.getTime() || 0;
-      const firstRunners = Array.from(new Set(runs.filter(r => (parseSafeDate((r as any).date)?.getTime() || 0) === firstDate).map(r => (r as any).pKey)));
-      firstRunners.forEach(pKey => {
-        athleteFirstSendsMap[pKey] = (athleteFirstSendsMap[pKey] || 0) + 1;
-      });
-    }
-  });
+  const buildFirstSendsMap = (historyMap: Record<string, unknown[]>) => {
+    const map: Record<string, number> = {};
+    Object.keys(historyMap).forEach((normC) => {
+      const allRunsForSkill = historyMap[normC] || [];
+      if (allRunsForSkill.length === 0) return;
+      // If a challenge has undated legacy sends, do not let a later dated send steal "First Send"
+      const hasUndated = allRunsForSkill.some((r) => !parseSafeDate((r as any).date));
+      if (hasUndated) return;
+      const runs = allRunsForSkill.filter((r) => parseSafeDate((r as any).date));
+      if (runs.length > 0) {
+        runs.sort(
+          (a, b) =>
+            (parseSafeDate((a as any).date)?.getTime() || 0) -
+            (parseSafeDate((b as any).date)?.getTime() || 0),
+        );
+        const firstDate = parseSafeDate((runs[0] as any).date)?.getTime() || 0;
+        const firstRunners = Array.from(
+          new Set(
+            runs
+              .filter((r) => (parseSafeDate((r as any).date)?.getTime() || 0) === firstDate)
+              .map((r) => (r as any).pKey),
+          ),
+        );
+        firstRunners.forEach((pKey) => {
+          map[pKey] = (map[pKey] || 0) + 1;
+        });
+      }
+    });
+    return map;
+  };
+
+  const athleteFirstSendsMap = buildFirstSendsMap(skillRunsHistory);
+  const season26FirstSendsMap = buildFirstSendsMap(season26RunsHistory);
+  const openFirstSendsMap = buildFirstSendsMap(openRunsHistory);
 
   result.season26Rankings = Object.keys(athleteMetadata)
     .filter((k) => {
@@ -697,7 +765,7 @@ export const processLiveFeedData = (
         athletes: perfs.length,
         challenges: perfs.length,
         sends: Math.max(season26AthleteTotalSubmissions[pKey] || 0, perfs.length),
-        firstSends: athleteFirstSendsMap[pKey] || 0,
+        firstSends: season26FirstSendsMap[pKey] || 0,
         latestRunDate,
         pts: totalskillPoints,
         sets: meta.sets || 0,
@@ -742,7 +810,7 @@ export const processLiveFeedData = (
         athletes: perfs.length,
         challenges: perfs.length,
         sends: Math.max(openAthleteTotalSubmissions[pKey] || 0, perfs.length),
-        firstSends: athleteFirstSendsMap[pKey] || 0,
+        firstSends: openFirstSendsMap[pKey] || 0,
         latestRunDate,
         pts: totalskillPoints,
         sets: meta.sets || 0,

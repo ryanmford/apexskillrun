@@ -4,10 +4,12 @@ self.onmessage = (e) => {
   const { type, payload } = e.data;
   
   if (type === 'PROCESS_AND_COMPUTE') {
+      const requestId = e.data.requestId ?? payload?.requestId;
       const finalState = computeAllState(payload);
 
       self.postMessage({ 
           type: 'COMPUTE_ALL_READY', 
+          requestId,
           payload: finalState
       });
   } else if (type === 'COMPUTE_LIVE_LADDER') {

@@ -262,13 +262,22 @@ export const SkillDetails = React.memo(
         if (a.isInterim && !b.isInterim) return -1;
         if (!a.isInterim && b.isInterim) return 1;
 
-        const aDate = a.date ? (parseSafeDate(a.date)?.getTime() ?? Infinity) : Infinity;
-        const bDate = b.date ? (parseSafeDate(b.date)?.getTime() ?? Infinity) : Infinity;
+        const aParsed = a.date ? parseSafeDate(a.date)?.getTime() : undefined;
+        const bParsed = b.date ? parseSafeDate(b.date)?.getTime() : undefined;
+        const aHasDate = typeof aParsed === "number" && !isNaN(aParsed);
+        const bHasDate = typeof bParsed === "number" && !isNaN(bParsed);
+
+        // Always keep undated legacy sends below dated sends
+        if (aHasDate && !bHasDate) return -1;
+        if (!aHasDate && bHasDate) return 1;
+
+        if (aHasDate && bHasDate && aParsed !== bParsed) {
+          const primary = aParsed - bParsed;
+          return sortDirection === "desc" ? -primary : primary;
+        }
+
         const aName = String(atMet[a.pKey]?.name || a.pKey || a.athlete || "").toUpperCase();
         const bName = String(atMet[b.pKey]?.name || b.pKey || b.athlete || "").toUpperCase();
-
-        const primary = aDate - bDate;
-        if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
         return aName.localeCompare(bName);
       });
       return sorted;

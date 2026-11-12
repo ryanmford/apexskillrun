@@ -130,10 +130,10 @@ export const ASRGlobalSearch = React.memo(({ theme }: { theme: "light" | "dark" 
     return [
       ...searchResults.locations.slice(0, 50).map(l => ({ type: "location", data: l })),
       ...searchResults.challenges.slice(0, 50).map(c => ({ type: "challenge", data: c })),
-      ...searchResults.gyms.slice(0, 50).map(g => ({ type: "team", data: g })),
+      ...searchResults.gyms.slice(0, 50).map(g => ({ type: "gym", data: { ...g, category: "gyms" } })),
       ...searchResults.players.slice(0, 50).map(p => ({ type: "player", data: p })),
-      ...searchResults.teams.slice(0, 50).map(t => ({ type: "team", data: t }))
-    ] as { type: "player" | "challenge" | "team" | "location", data: SearchResultPlayer | SearchResultSkill | SearchResultTeam | SearchResultLocation }[];
+      ...searchResults.teams.slice(0, 50).map(t => ({ type: "team", data: { ...t, category: "teams" } }))
+    ] as { type: "player" | "challenge" | "team" | "gym" | "location", data: SearchResultPlayer | SearchResultSkill | SearchResultTeam | SearchResultLocation }[];
   }, [searchResults]);
 
   const [searchFocusedIndex, setSearchFocusedIndex] = useState(-1);
@@ -226,7 +226,7 @@ export const ASRGlobalSearch = React.memo(({ theme }: { theme: "light" | "dark" 
                  {searchResults.gyms.slice(0, 50).map((g: SearchResultTeam, i) => {
                    const isFocused = searchFocusedIndex === i + searchResults.locations.slice(0, 50).length + searchResults.challenges.slice(0, 50).length;
                    return (
-                     <button type="button" key={g.name || i} onClick={() => { navigateToEntity("team", g); clearSearch(); }} onTouchStart={() => {}} className={cn("w-full flex items-center gap-3 px-3 py-2 text-left rounded-xl transition-all active:scale-[0.98]", isFocused ? "bg-black/10 dark:bg-white/10 ring-1 ring-zinc-500" : "hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10")}>
+                     <button type="button" key={g.name || i} onClick={() => { navigateToEntity("gym", { ...g, category: "gyms" }); clearSearch(); }} onTouchStart={() => {}} className={cn("w-full flex items-center gap-3 px-3 py-2 text-left rounded-xl transition-all active:scale-[0.98]", isFocused ? "bg-black/10 dark:bg-white/10 ring-1 ring-zinc-500" : "hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10")}>
                         <Users className="w-4 h-4 opacity-50 flex-shrink-0" />
                         <span className="font-bold flex-1 text-sm truncate">{g.name}</span>
                         <ChevronRight className="w-4 h-4 opacity-30 ml-auto flex-shrink-0" />
@@ -258,7 +258,7 @@ export const ASRGlobalSearch = React.memo(({ theme }: { theme: "light" | "dark" 
                  {searchResults.teams.slice(0, 50).map((t: SearchResultTeam, i) => {
                    const isFocused = searchFocusedIndex === i + searchResults.locations.slice(0, 50).length + searchResults.challenges.slice(0, 50).length + searchResults.gyms.slice(0, 50).length + searchResults.players.slice(0, 50).length;
                    return (
-                     <button type="button" key={t.name || i} onClick={() => { navigateToEntity("team", t); clearSearch(); }} onTouchStart={() => {}} className={cn("w-full flex items-center gap-3 px-3 py-2 text-left rounded-xl transition-all active:scale-[0.98]", isFocused ? "bg-black/10 dark:bg-white/10 ring-1 ring-zinc-500" : "hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10")}>
+                     <button type="button" key={t.name || i} onClick={() => { navigateToEntity("team", { ...t, category: "teams" }); clearSearch(); }} onTouchStart={() => {}} className={cn("w-full flex items-center gap-3 px-3 py-2 text-left rounded-xl transition-all active:scale-[0.98]", isFocused ? "bg-black/10 dark:bg-white/10 ring-1 ring-zinc-500" : "hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10")}>
                         <Users className="w-4 h-4 opacity-50 flex-shrink-0" />
                         <span className="font-bold flex-1 text-sm truncate">{t.name}</span>
                         <ChevronRight className="w-4 h-4 opacity-30 ml-auto flex-shrink-0" />

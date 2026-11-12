@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { cn, formatLocation, normalizeName, fixCountryEntity, getCombinedFlags } from "../../lib/asr-utils";
+import { cn, CONFIG, formatLocation, normalizeName, fixCountryEntity, getCombinedFlags } from "../../lib/asr-utils";
 import { ASRStatCard } from "../common/ASRStatCard";
 import { FallbackAvatar } from "../common/FallbackAvatar";
 import { ProfileHeader, InspectorTabContainer } from "./InspectorComponents";
@@ -73,17 +73,23 @@ export const RegionDetails = React.memo(
       }
     };
 
+    const isCountryOnlyRegion =
+      targetTokens.length === 1 &&
+      computedFlagInfo.name !== CONFIG.FALLBACKS.UNKNOWN_LOCATION &&
+      computedFlagInfo.flag !== "🏳️";
+
     const matchRegion = (obj: any): boolean => {
       const locStr = formatLocation(obj);
       if (!locStr || locStr === "UNKNOWN") return false;
 
-      const regionFlags = getCombinedFlags(region.flag, finalFlag).split(" ").filter(Boolean);
-      if (regionFlags.length > 0) {
-        const playerFlags = getCombinedFlags(obj.flag, obj.country, obj.location, obj.region, obj.state, locStr).split(" ").filter(Boolean);
-        
-        for (const flag of regionFlags) {
-          if (flag !== "🏳️" && playerFlags.includes(flag)) {
-            return true;
+      if (isCountryOnlyRegion) {
+        const regionFlags = getCombinedFlags(region.flag, finalFlag).split(" ").filter(Boolean);
+        if (regionFlags.length > 0) {
+          const playerFlags = getCombinedFlags(obj.flag, obj.country, obj.location, obj.region, obj.state, locStr).split(" ").filter(Boolean);
+          for (const flag of regionFlags) {
+            if (flag !== "🏳️" && playerFlags.includes(flag)) {
+              return true;
+            }
           }
         }
       }
@@ -160,6 +166,12 @@ export const RegionDetails = React.memo(
         }
       });
 
+      const atPlayersMap = new Map<string, any>();
+      (dataContext.data || []).forEach((p: any) => {
+        const k = p.pKey || normalizeName(p.name);
+        if (k) atPlayersMap.set(k, p);
+      });
+
       return Object.values(atMet)
         .filter((p: any) => {
           const pKey = p.pKey || normalizeName(p.name);
@@ -170,14 +182,17 @@ export const RegionDetails = React.memo(
         })
         .map((p: any) => {
           const pKey = p.pKey || normalizeName(p.name);
+          const liveP = atPlayersMap.get(pKey);
           const stats = regionStats[pKey] || { sends: 0, pts: 0 };
+          const effectivePts = stats.sends > 0 ? stats.pts : (liveP?.pts ?? p.pts ?? 0);
           return {
             ...p,
             sends: stats.sends,
+            pts: effectivePts,
           };
         })
-        .sort((a: any, b: any) => (b.pts || 0) - (a.pts || 0));
-    }, [atMet, region, regionalSkills, allTimeRankedPKeys]);
+        .sort((a: any, b: any) => (b.pts || 0) - (a.pts || 0) || (b.sends || 0) - (a.sends || 0));
+    }, [atMet, dataContext.data, region, regionalSkills, allTimeRankedPKeys]);
 
     return (
       <div

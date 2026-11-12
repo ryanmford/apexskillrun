@@ -94,10 +94,12 @@ export const useAppNavigation = () => {
           (typeof entityData === "string" ? entityData : "");
         if (entityName && typeof entityName === "string") {
           const slug = encodeURIComponent(createSlug(entityName));
+          const entityCategory = (entityData as { category?: string })?.category;
           let prefix = "players";
           if (type === "challenge") prefix = "challenges";
           if (type === "setter") prefix = "setters";
-          if (type === "team") prefix = "teams";
+          if (type === "team") prefix = entityCategory === "gyms" ? "gyms" : "teams";
+          if (type === "gym") prefix = "gyms";
           if (type === "region") prefix = "regions";
 
           if (type === "location") {
@@ -144,9 +146,9 @@ export const useAppNavigation = () => {
       const segments = rootPath.split("/").filter(Boolean);
       if (
         segments.length > 1 &&
-        ["players", "challenges", "setters", "teams"].includes(segments[0])
+        ["players", "challenges", "setters", "teams", "gyms", "regions"].includes(segments[0])
       ) {
-        rootPath = `/${segments[0]}`;
+        rootPath = segments[0] === "regions" ? "/rankings" : `/${segments[0]}`;
       }
 
       // Navigate to that root location
@@ -210,6 +212,7 @@ const getInspectorDataForPath = (
   settersWithImpact: SetterProfile[],
   setterMet: Record<string, SetterProfile>,
   cMet: Record<string, unknown>,
+  teamsAggregated?: Record<string, Record<string, TeamProfile[]>>,
 ) => {
   const pathSegments = pathname.split("/").filter(Boolean);
   const viewPrefix = pathSegments[0];
@@ -279,8 +282,45 @@ const getInspectorDataForPath = (
       requestedId: entitySlug,
     };
   }
-  if (viewPrefix === "teams") {
-    return { type: "team", data: { name: searchKey } };
+  if (viewPrefix === "gyms" || viewPrefix === "teams") {
+    const matchTeam = (arr?: TeamProfile[]) =>
+      (arr || []).find(
+        (t) =>
+          t.name?.toLowerCase() === searchKey ||
+          t.name?.toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedKey,
+      );
+
+    const gymsAll = teamsAggregated?.gyms?.allTime;
+    const teamsAll = teamsAggregated?.teams?.allTime;
+    const hasLoadedTeams = Boolean((gymsAll && gymsAll.length > 0) || (teamsAll && teamsAll.length > 0));
+
+    if (viewPrefix === "gyms") {
+      const foundGym = matchTeam(gymsAll) || matchTeam(teamsAll);
+      const resolvedCat = matchTeam(gymsAll) ? "gyms" : matchTeam(teamsAll) ? "teams" : "gyms";
+      return {
+        type: "team",
+        data: foundGym
+          ? { ...foundGym, category: resolvedCat }
+          : { name: searchKey, category: "gyms" },
+        isNotFound: hasLoadedTeams && !foundGym,
+        requestedId: entitySlug,
+      };
+    }
+
+    // viewPrefix === "teams": prioritize teams/crews, with backwards-compatible fallback to gyms
+    const foundTeam = matchTeam(teamsAll);
+    const foundGymFallback = !foundTeam ? matchTeam(gymsAll) : undefined;
+    const resolved = foundTeam || foundGymFallback;
+    const resolvedCat = foundTeam ? "teams" : foundGymFallback ? "gyms" : "teams";
+
+    return {
+      type: "team",
+      data: resolved
+        ? { ...resolved, category: resolvedCat }
+        : { name: searchKey, category: "teams" },
+      isNotFound: hasLoadedTeams && !resolved,
+      requestedId: entitySlug,
+    };
   }
   if (viewPrefix === "regions") {
     return { type: "region", data: { name: searchKey } };
@@ -297,6 +337,9 @@ export const useInspectorData = () => {
   const settersWithImpact = useDataStore((s) => s.settersWithImpact);
   const setterMet = useDataStore((s) => s.setterMet as Record<string, SetterProfile>);
   const cMet = useDataStore((s) => s.cMet as Record<string, unknown>);
+  const teamsAggregated = useDataStore(
+    (s) => s.teamsAggregated as Record<string, Record<string, TeamProfile[]>>,
+  );
 
   // Only recompute when pathname or state changes, ignoring search params/hash
   const locationPathname = location.pathname;
@@ -317,6 +360,7 @@ export const useInspectorData = () => {
         settersWithImpact,
         setterMet,
         cMet,
+        teamsAggregated,
       );
       if (data) {
         history.unshift(data);
@@ -333,7 +377,7 @@ export const useInspectorData = () => {
       history: history,
       historyIndex: history.length > 0 ? history.length - 1 : -1,
     };
-  }, [locationPathname, locationState, atMet, masterSkillList, settersWithImpact, setterMet, cMet]);
+  }, [locationPathname, locationState, atMet, masterSkillList, settersWithImpact, setterMet, cMet, teamsAggregated]);
 };
 
 export const useSkillList = () => {

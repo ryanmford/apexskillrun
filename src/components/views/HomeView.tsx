@@ -28,17 +28,10 @@ import {
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { ASRWeeklyActivityChart } from "../inspector/ASRWeeklyActivityChart";
 
-const LOCAL_HERO_VIDEOS = [
-  "/jason-bergeron-UMC-1.mp4",
-  "/olof-wood-tac-stride-plyo-stick.mp4",
+const HERO_VIDEOS = [
+  "https://raw.githubusercontent.com/ryanmford/apexskillrun-old/main/public/jason-bergeron-UMC-1.mp4",
+  "https://raw.githubusercontent.com/ryanmford/apexskillrun-old/main/public/olof-wood-tac-stride-plyo-stick.mp4",
 ];
-
-const CDN_FALLBACK_MAP: Record<string, string> = {
-  "/jason-bergeron-UMC-1.mp4":
-    "https://raw.githubusercontent.com/ryanmford/apexskillrun-old/main/public/jason-bergeron-UMC-1.mp4",
-  "/olof-wood-tac-stride-plyo-stick.mp4":
-    "https://raw.githubusercontent.com/ryanmford/apexskillrun-old/main/public/olof-wood-tac-stride-plyo-stick.mp4",
-};
 
 export const HomeView = React.memo(() => {
   const navigate = useNavigate();
@@ -86,58 +79,23 @@ export const HomeView = React.memo(() => {
   // Home Hero Background video rotation & self-healing fallback
   const [failedVideos, setFailedVideos] = React.useState<string[]>([]);
   const [activeVideoIndex, setActiveVideoIndex] = React.useState(() => {
-    return Math.floor(Math.random() * LOCAL_HERO_VIDEOS.length);
+    return Math.floor(Math.random() * HERO_VIDEOS.length);
   });
 
   const availableVideos = useMemo(() => {
-    const working = LOCAL_HERO_VIDEOS.filter((v) => !failedVideos.includes(v));
-    return working.length > 0 ? working : LOCAL_HERO_VIDEOS;
+    const working = HERO_VIDEOS.filter((v) => !failedVideos.includes(v));
+    return working.length > 0 ? working : HERO_VIDEOS;
   }, [failedVideos]);
 
   const currentVideoSrc = useMemo(() => {
-    const preferred = LOCAL_HERO_VIDEOS[activeVideoIndex] || LOCAL_HERO_VIDEOS[0];
+    const preferred = HERO_VIDEOS[activeVideoIndex] || HERO_VIDEOS[0];
     if (failedVideos.includes(preferred)) {
-      // If local failed, check if CDN URL has also failed
-      const cdnFallback = CDN_FALLBACK_MAP[preferred];
-      if (cdnFallback && !failedVideos.includes(cdnFallback)) {
-        return cdnFallback;
-      }
       return availableVideos[0];
     }
     return preferred;
   }, [activeVideoIndex, failedVideos, availableVideos]);
 
   const videoRef = React.useRef<HTMLVideoElement>(null);
-
-  // Validate local videos: if local returns HTML (SPA 404 fallback) or 0-length, fall back to CDN
-  React.useEffect(() => {
-    let active = true;
-    const checkVideos = async () => {
-      const failedList: string[] = [];
-      await Promise.all(
-        LOCAL_HERO_VIDEOS.map(async (video) => {
-          try {
-            const res = await fetch(video, { method: "HEAD" });
-            const contentType = res.headers.get("content-type") || "";
-            const contentLength = res.headers.get("content-length");
-            // If SPA router intercepted and returned HTML, or response is empty / not ok
-            if (!res.ok || contentType.includes("text/html") || contentLength === "0") {
-              failedList.push(video);
-            }
-          } catch {
-            failedList.push(video);
-          }
-        }),
-      );
-      if (active && failedList.length > 0) {
-        setFailedVideos((prev) => Array.from(new Set([...prev, ...failedList])));
-      }
-    };
-    checkVideos();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   // Ensure high-reliability mobile autoplay and clean transitions
   React.useEffect(() => {
@@ -153,17 +111,9 @@ export const HomeView = React.memo(() => {
   }, [currentVideoSrc]);
 
   const handleVideoError = React.useCallback(() => {
-    setFailedVideos((prev) => {
-      if (!prev.includes(currentVideoSrc)) {
-        // If local failed, try the CDN fallback for this video
-        const cdnUrl = CDN_FALLBACK_MAP[currentVideoSrc];
-        if (cdnUrl && !prev.includes(cdnUrl)) {
-          return [...prev, currentVideoSrc];
-        }
-        return [...prev, currentVideoSrc];
-      }
-      return prev;
-    });
+    setFailedVideos((prev) =>
+      prev.includes(currentVideoSrc) ? prev : [...prev, currentVideoSrc],
+    );
   }, [currentVideoSrc]);
 
   const handleJumpToContent = React.useCallback(() => {
@@ -242,29 +192,17 @@ export const HomeView = React.memo(() => {
       }
       pOfDay = { ...chosenPlayer };
 
-      // Attempt to find AT rank if available, else OR rank
+      // Use tie-aware precomputed currentRank from AT if ranked, else OP
       if (pOfDay) {
-        if (pOfDay.gender === "F") {
-          const atIdx =
-            playerList_F_AT?.findIndex((p: any) => p.name === pOfDay?.name) ??
-            -1;
-          pOfDay._gRank =
-            atIdx >= 0
-              ? atIdx + 1
-              : (playerList_F_OP?.findIndex(
-                  (p: any) => p.name === pOfDay?.name,
-                ) ?? 0) + 1;
-        } else {
-          const atIdx =
-            playerList_M_AT?.findIndex((p: any) => p.name === pOfDay?.name) ??
-            -1;
-          pOfDay._gRank =
-            atIdx >= 0
-              ? atIdx + 1
-              : (playerList_M_OP?.findIndex(
-                  (p: any) => p.name === pOfDay?.name,
-                ) ?? 0) + 1;
-        }
+        const atPool = pOfDay.gender === "F" ? playerList_F_AT : playerList_M_AT;
+        const opPool = pOfDay.gender === "F" ? playerList_F_OP : playerList_M_OP;
+        const atMatch = atPool?.find((p: any) => !p.isDivider && p.pKey === pOfDay?.pKey);
+        const opMatch = opPool?.find((p: any) => !p.isDivider && p.pKey === pOfDay?.pKey);
+        pOfDay._gRank =
+          (atMatch && atMatch.currentRank !== "UR" ? atMatch.currentRank : undefined) ??
+          (opMatch && opMatch.currentRank !== "UR" ? opMatch.currentRank : undefined) ??
+          pOfDay.currentRank ??
+          "UR";
       }
     }
 
@@ -376,8 +314,9 @@ export const HomeView = React.memo(() => {
 
       rOfDay = {
         athleteName: `${pFlagFmt}${athleteName}`,
+        playerObj: pObj || { name: athleteName, pKey: bestRun[0] },
         time: bestRun[1].toFixed(2),
-        pts: String(Math.round(pts || 0)),
+        pts: Number(pts || 0).toFixed(2),
         videoUrl: bestRun[2],
         skillName: `${cFlagFmt}${targetSkill.name}`,
         challenge: targetSkill,
@@ -591,11 +530,14 @@ export const HomeView = React.memo(() => {
               dailyRecord && {
                 type: "video",
                 data: {
-                  name: dailyRecord.skillName,
+                  name: (dailyRecord.challenge as any)?.name || dailyRecord.skillName,
                   fallbackType: "challenge",
                   videoUrl: dailyRecord.videoUrl,
                 },
                 displayName: dailyRecord.athleteName,
+                onTitleClick: dailyRecord.playerObj
+                  ? () => navigateToEntity("player", dailyRecord.playerObj as Record<string, unknown>)
+                  : undefined,
                 label: "Send of the Day",
                 icon: <Activity className="w-4 h-4" />,
                 color: "text-pink-500",
@@ -604,8 +546,30 @@ export const HomeView = React.memo(() => {
                 hoverText:
                   "group-hover:text-pink-500 dark:group-hover:text-pink-400",
                 metrics: [
-                  { label: "Challenge", value: dailyRecord.skillName },
-                  { label: "POINTS", value: dailyRecord.pts },
+                  {
+                    label: "Challenge",
+                    value: (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigateToEntity(
+                            "challenge",
+                            (dailyRecord.challenge as Record<string, unknown>) || {
+                              name: dailyRecord.skillName,
+                            },
+                          );
+                        }}
+                        className="hover:underline text-left uppercase cursor-pointer"
+                      >
+                        {String(dailyRecord.skillName)}
+                      </button>
+                    ),
+                  },
+                  {
+                    label: "POINTS",
+                    value: Number(dailyRecord.pts || 0).toFixed(2),
+                  },
                 ],
               },
               topPlayer && {
@@ -629,7 +593,7 @@ export const HomeView = React.memo(() => {
                   },
                   {
                     label: "PTS",
-                    value: String(Math.round(Number(topPlayer.pts || 0))),
+                    value: Number(topPlayer.pts || 0).toFixed(2),
                   },
                 ],
               },
@@ -713,7 +677,20 @@ export const HomeView = React.memo(() => {
                           feat.hoverText,
                         )}
                       >
-                        {feat.displayName}
+                        {feat.onTitleClick ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              feat.onTitleClick();
+                            }}
+                            className="text-left uppercase hover:underline cursor-pointer"
+                          >
+                            {feat.displayName}
+                          </button>
+                        ) : (
+                          feat.displayName
+                        )}
                       </div>
                     </div>
 

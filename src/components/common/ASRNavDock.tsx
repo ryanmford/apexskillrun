@@ -21,30 +21,75 @@ export const ASRNavDock = React.memo(
     const setIsSubmitModalOpen = useAppStore((s) => s.setIsSubmitModalOpen);
 
     useEffect(() => {
+      const isEditableElement = (el: Element | null): boolean => {
+        if (!el || !el.isConnected) return false;
+        const tag = el.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      };
+
+      const isMobileDevice = () =>
+        window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 768;
+
+      const syncKeyboardState = () => {
+        if (!isMobileDevice()) {
+          setIsKeyboardOpen(false);
+          return;
+        }
+        const active = document.activeElement;
+        if (!isEditableElement(active)) {
+          setIsKeyboardOpen(false);
+          return;
+        }
+        // When visualViewport is supported, confirm the viewport shrunk or focus is active on mobile
+        if (window.visualViewport) {
+          const heightRatio = window.visualViewport.height / window.innerHeight;
+          setIsKeyboardOpen(heightRatio < 0.85 || isEditableElement(active));
+        } else {
+          setIsKeyboardOpen(true);
+        }
+      };
+
       const handleFocusIn = (e: Event) => {
-        const target = e.target as HTMLElement;
-        if (
-          target &&
-          (target.tagName === "INPUT" ||
-            target.tagName === "TEXTAREA" ||
-            target.tagName === "SELECT")
-        ) {
+        if (!isMobileDevice()) {
+          setIsKeyboardOpen(false);
+          return;
+        }
+        const target = e.target as Element | null;
+        if (isEditableElement(target)) {
           setIsKeyboardOpen(true);
         }
       };
 
       const handleFocusOut = () => {
-        setIsKeyboardOpen(false);
+        // Defer slightly so focus transfers between inputs or unmounting modals settle first
+        window.requestAnimationFrame(() => {
+          if (!isEditableElement(document.activeElement) || !isMobileDevice()) {
+            setIsKeyboardOpen(false);
+          }
+        });
       };
 
       window.addEventListener("focusin", handleFocusIn);
       window.addEventListener("focusout", handleFocusOut);
+      window.addEventListener("resize", syncKeyboardState, { passive: true });
+      window.visualViewport?.addEventListener("resize", syncKeyboardState);
 
       return () => {
         window.removeEventListener("focusin", handleFocusIn);
         window.removeEventListener("focusout", handleFocusOut);
+        window.removeEventListener("resize", syncKeyboardState);
+        window.visualViewport?.removeEventListener("resize", syncKeyboardState);
       };
-    }, []);
+    }, [setIsKeyboardOpen]);
+
+    useEffect(() => {
+      if (
+        !document.activeElement ||
+        !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)
+      ) {
+        setIsKeyboardOpen(false);
+      }
+    }, [currentView, setIsKeyboardOpen]);
 
     useEffect(() => {
       let lastScrollY = window.scrollY;

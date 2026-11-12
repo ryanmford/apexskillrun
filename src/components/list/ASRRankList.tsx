@@ -206,16 +206,9 @@ export const ASRRankList = ({
     // 3. Initial check right after mount / visibleCount increment
     checkVisibility();
 
-    // 4. Stalled-recovery interval: guarantees that even if inertia flicking coalesced events,
-    // visible records are never stuck for more than 400ms
-    const recoveryInterval = setInterval(() => {
-      checkVisibility();
-    }, 400);
-
     return () => {
       if (observer) observer.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
-      clearInterval(recoveryInterval);
       container.removeEventListener("scroll", onScrollOrTouch);
       if (isElement) {
         window.removeEventListener("scroll", onScrollOrTouch);
@@ -279,7 +272,10 @@ export const ASRRankList = ({
                   time !== undefined
                 ) {
                   stats.push({
-                    value: Math.round(cleanNumeric(points) || 0).toLocaleString(),
+                    value: (cleanNumeric(points) || 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    }),
                     label: "PTS",
                   });
                 } else {
@@ -296,8 +292,6 @@ export const ASRRankList = ({
                     "SETS",
                     "RANK",
                     "SENDS",
-                    "PTS",
-                    "POINTS",
                   ].includes(String(valueLabel || "").toUpperCase());
                   stats.push({
                     value:

@@ -313,7 +313,7 @@ export const PlayerDetails = React.memo(
                       glow: "",
                     },
                     { label: "RATING", value: stats.rating.toFixed(2) },
-                    { label: "POINTS", value: Math.round(stats.pts || 0) },
+                    { label: "POINTS", value: (stats.pts || 0).toFixed(2) },
                     { label: "SENDS", value: stats.sends },
                     { label: "1ST SENDS", value: stats.firstSends },
                   ].map((s, i) => (
@@ -562,7 +562,12 @@ export const PlayerDetails = React.memo(
                       icon={<Building2 size={18} />}
                       label="GYM"
                       value={String(meta.homeGym)}
-                      onClick={() => onEntityClick("team", { name: String(meta.homeGym) })}
+                      onClick={() =>
+                        onEntityClick("gym", {
+                          name: String(meta.homeGym),
+                          category: "gyms",
+                        })
+                      }
                     />
                   )}
                   {meta.teams && meta.teams.length > 0
@@ -575,7 +580,12 @@ export const PlayerDetails = React.memo(
                             icon={<Users size={18} />}
                             label={meta.teams && meta.teams.length > 1 ? `TEAM ${i + 1}` : "TEAM"}
                             value={String(teamName)}
-                            onClick={() => onEntityClick("team", { name: String(teamName) })}
+                            onClick={() =>
+                              onEntityClick("team", {
+                                name: String(teamName),
+                                category: "teams",
+                              })
+                            }
                           />
                         );
                       })

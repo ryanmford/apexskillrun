@@ -40,7 +40,12 @@ export const usePlayerDetailsData = (
       pts: pData.pts || 0,
       challenges: pData.challenges || 0,
       sends: pData.sends || 0,
-      firstSends: pData.firstSends || meta.firstSends || 0,
+      firstSends:
+        pData.firstSends !== undefined
+          ? pData.firstSends
+          : activeMode === "all-time"
+            ? meta.firstSends || 0
+            : 0,
     };
   }, [lbAT, lbOP, dataContext.lbSeason26, activeMode, pKey, meta]);
 
@@ -272,16 +277,28 @@ export const useTeamDetailsData = (
   const lbAT = dataContext?.lbAT || EMPTY_LB;
   const teamsAggregated = dataContext?.teamsAggregated || EMPTY_OBJ;
 
-  const teamCategory = team?.category || "gyms";
   const contextStr = mode === "all-time" ? "allTime" : mode === "2026" ? "season26" : "open";
+  const targetUpper = (team?.name || "").toUpperCase();
+
+  const resolvedCategory = useMemo(() => {
+    if (team?.category === "gyms" || team?.category === "teams") {
+      return team.category;
+    }
+    const inTeams = (teamsAggregated?.["teams"]?.[contextStr] || []).some(
+      (t: { name?: string }) => (t.name || "").toUpperCase() === targetUpper,
+    );
+    if (inTeams) return "teams";
+    return "gyms";
+  }, [team?.category, teamsAggregated, contextStr, targetUpper]);
+
   const teamsAggregatedMap =
-    teamsAggregated?.[teamCategory] || teamsAggregated?.["gyms"];
+    teamsAggregated?.[resolvedCategory] || teamsAggregated?.["gyms"];
   const teamsAgg = teamsAggregatedMap?.[contextStr] || [];
 
   const tMeta = Array.isArray(teamsAgg)
     ? teamsAgg.find(
         (t: { name?: string }) =>
-          (t.name || "").toUpperCase() === (team?.name || "").toUpperCase(),
+          (t.name || "").toUpperCase() === targetUpper,
       ) || team
     : team;
 
@@ -292,23 +309,23 @@ export const useTeamDetailsData = (
       );
     }
     const season26Data = dataContext.season26Data;
-    const source = mode === "all-time" ? Object.values(atMet) : mode === "2026" ? (season26Data || []) : openData;
+    const allTimeData = dataContext.data && dataContext.data.length > 0 ? dataContext.data : Object.values(atMet);
+    const source = mode === "all-time" ? allTimeData : mode === "2026" ? (season26Data || []) : openData;
     return source
       .filter((p: PlayerProfile) => {
-        const normalizedTarget = (team?.name || "").toUpperCase();
-        if (!normalizedTarget) return [];
+        if (!targetUpper) return false;
         const gymMatch =
-          p.homeGym && p.homeGym.toUpperCase() === normalizedTarget;
+          p.homeGym && p.homeGym.toUpperCase() === targetUpper;
         const teamsMatch =
           p.teams &&
           p.teams.some(
-            (t: { name?: string } | string) => (typeof t === "string" ? t : (t?.name || "")).toUpperCase() === normalizedTarget,
+            (t: { name?: string } | string) => (typeof t === "string" ? t : (t?.name || "")).toUpperCase() === targetUpper,
           );
         return gymMatch || teamsMatch;
       })
       .map((p: PlayerProfile & { pts?: number }) => ({ ...p, contribution: p.pts || 0 }))
       .sort((a: PlayerProfile & { contribution?: number }, b: PlayerProfile & { contribution?: number }) => (b.contribution || 0) - (a.contribution || 0));
-  }, [atMet, openData, mode, team.name, tMeta]);
+  }, [atMet, dataContext.data, dataContext.season26Data, openData, mode, targetUpper, tMeta]);
 
   const setters = useMemo(() => {
     return settersWithImpact

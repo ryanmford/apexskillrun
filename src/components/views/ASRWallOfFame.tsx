@@ -13,6 +13,7 @@ import {
 import { ASRSectionHeading } from "../common/ASRSectionHeading";
 import { ASRRankBadge } from "../ASRListItems";
 import { ASRPromotionBanner } from "../common/ASRPromotionBanner";
+import { WallOfFameSkeleton } from "../common/Skeletons";
 
 interface ASRWallOfFameProps {
   onEntityClick: (type: string, data: any, options?: any) => void;
@@ -57,7 +58,7 @@ export const ASRWallOfFame = React.memo(
           </div>
         );
       }
-      return null;
+      return <WallOfFameSkeleton />;
     }
 
     const sections = [
@@ -216,7 +217,7 @@ export const ASRWallOfFame = React.memo(
                           if (sec.k === "rating")
                             displayVal = (a.rating || 0).toFixed(2);
                           else if (sec.k === "pts")
-                            displayVal = Math.round(a.pts || 0);
+                            displayVal = (a.pts || 0).toFixed(2);
                           else if (sec.k === "contributionScore")
                             displayVal = (a.contributionScore || 0).toFixed(2);
                           else if (sec.k === "impact") displayVal = a.impact || 0;

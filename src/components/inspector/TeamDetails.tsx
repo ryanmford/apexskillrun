@@ -153,7 +153,11 @@ export const TeamDetails = React.memo(
           {contentTab === "bio" && (
             <InspectorTabContainer>
               <div className="flex flex-col gap-4">
-                <SectionTitle>GYM PROFILE</SectionTitle>
+                <SectionTitle>
+                  {(tMeta?.category || team?.category) === "teams"
+                    ? "TEAM PROFILE"
+                    : "GYM PROFILE"}
+                </SectionTitle>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(tMeta?.website || team?.website) && (
                     <BioRow
@@ -235,7 +239,7 @@ export const TeamDetails = React.memo(
 
               <div className="flex flex-col p-6 gap-10">
                 <div className="grid grid-cols-2 gap-4">
-                  <ASRStatCard label="POINTS" value={Math.round(playerStats.points || 0)} />
+                  <ASRStatCard label="POINTS" value={(playerStats.points || 0).toFixed(2)} />
                   <ASRStatCard label="SENDS" value={playerStats.sends} />
                 </div>
 

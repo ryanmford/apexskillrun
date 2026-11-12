@@ -364,14 +364,33 @@ export const csvToObjects = (
   if (validLines.length <= headerRowIndex) return [];
   
   const headers = parseLine(validLines[headerRowIndex]);
+  const normalizedHeaders = headers.map((h) => h.toLowerCase().trim());
   const colMap: Record<string, number> = {};
 
   Object.entries(mapping).forEach(([field, searchTerms]: [string, string[]]) => {
-    colMap[field] = headers.findIndex((h) =>
-      searchTerms.some((term: string) =>
-        h.toLowerCase().trim().includes(term.toLowerCase()),
-      ),
-    );
+    let matchedIdx = -1;
+    // Pass 1: Exact header match (in priority order of searchTerms)
+    for (const term of searchTerms) {
+      const tLow = term.toLowerCase().trim();
+      const exactIdx = normalizedHeaders.findIndex((h) => h === tLow);
+      if (exactIdx !== -1) {
+        matchedIdx = exactIdx;
+        break;
+      }
+    }
+    // Pass 2: Substring match (skipping single-character ASCII tokens like "#" to avoid false collisions)
+    if (matchedIdx === -1) {
+      for (const term of searchTerms) {
+        const tLow = term.toLowerCase().trim();
+        if (tLow.length === 0 || (tLow.length === 1 && tLow.charCodeAt(0) <= 127)) continue;
+        const subIdx = normalizedHeaders.findIndex((h) => h.includes(tLow));
+        if (subIdx !== -1) {
+          matchedIdx = subIdx;
+          break;
+        }
+      }
+    }
+    colMap[field] = matchedIdx;
   });
 
   return validLines.slice(headerRowIndex + 1).map((line) => {
@@ -382,6 +401,7 @@ export const csvToObjects = (
       obj[field] = idx !== -1 ? vals[idx] : undefined;
     });
     obj.__raw = vals;
+    obj.__headers = normalizedHeaders;
     return obj;
   });
 };

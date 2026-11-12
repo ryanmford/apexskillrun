@@ -224,3 +224,85 @@ export const DetailsSkeleton = () => {
     </div>
   );
 };
+
+export const WallOfFameSkeleton = () => {
+  const theme = useContext(ThemeContext) || "dark";
+  const bgClass = theme === "dark" ? "bg-white/[0.04]" : "bg-black/[0.04]";
+  const borderClass =
+    theme === "dark" ? "border-white/[0.06]" : "border-black/[0.06]";
+
+  return (
+    <div className="flex flex-col gap-10 sm:gap-12 pb-32 animate-in fade-in duration-300 w-full max-w-6xl mx-auto">
+      <div className="px-4 sm:px-6 w-full flex flex-col gap-3.5 pt-2">
+        <div className={cn("h-3 w-48 rounded-full animate-pulse", bgClass)} />
+        <div
+          className={cn(
+            "p-2.5 sm:p-3.5 rounded-[1.6rem] border",
+            bgClass,
+            borderClass,
+          )}
+        >
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+              <div
+                key={i}
+                className={cn(
+                  "h-9 sm:w-28 rounded-xl animate-pulse",
+                  theme === "dark" ? "bg-white/[0.06]" : "bg-black/[0.06]",
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8 px-4 sm:px-6">
+        {[1, 2, 3, 4].map((cardIdx) => (
+          <div key={cardIdx} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 pt-2">
+              <div className={cn("h-5 w-36 rounded-full animate-pulse", bgClass)} />
+              <div className={cn("h-2.5 w-52 rounded-full animate-pulse", bgClass)} />
+            </div>
+            <div
+              className={cn(
+                "rounded-2xl sm:rounded-[2.5rem] border overflow-hidden divide-y",
+                bgClass,
+                borderClass,
+                theme === "dark" ? "divide-white/[0.05]" : "divide-black/[0.05]",
+              )}
+            >
+              {[1, 2, 3, 4, 5].map((rowIdx) => (
+                <div
+                  key={rowIdx}
+                  className="flex items-center justify-between py-3 sm:py-5 px-4 sm:px-6 animate-pulse"
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div
+                      className={cn(
+                        "w-7 h-7 rounded-full shrink-0",
+                        theme === "dark" ? "bg-white/[0.08]" : "bg-black/[0.08]",
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        "h-4 w-36 rounded-full",
+                        theme === "dark" ? "bg-white/[0.08]" : "bg-black/[0.08]",
+                      )}
+                    />
+                  </div>
+                  <div
+                    className={cn(
+                      "h-5 w-16 rounded-full",
+                      theme === "dark" ? "bg-white/[0.1]" : "bg-black/[0.1]",
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+

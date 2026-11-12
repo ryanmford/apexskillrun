@@ -24,6 +24,37 @@ const sortAthletesWithTiebreakers = (a: PlayerProfile, b: PlayerProfile) => {
   return (a.latestRunDate?.getTime() || Infinity) - (b.latestRunDate?.getTime() || Infinity);
 };
 
+const buildTieAwareRankMap = (qualifiedArr: PlayerProfile[]) => {
+  const rm = new Map<string, number>();
+  let currRank = 1;
+  let prevRating = -1;
+  let prevPts = -1;
+  let prevRuns = -1;
+  let prevDate = -1;
+
+  qualifiedArr.forEach((q, i) => {
+    const rating = q.rating || 0;
+    const pts = q.pts || 0;
+    const sends = q.sends || 0;
+    const date = q.latestRunDate?.getTime() || Infinity;
+
+    const diffRating = Math.abs(rating - prevRating) > 0.000001;
+    const diffPts = pts !== prevPts;
+    const diffRuns = sends !== prevRuns;
+    const diffDate = date !== prevDate;
+
+    if (i === 0 || diffRating || diffPts || diffRuns || diffDate) {
+      currRank = i + 1;
+      prevRating = rating;
+      prevPts = pts;
+      prevRuns = sends;
+      prevDate = date;
+    }
+    rm.set(q.pKey, currRank);
+  });
+  return rm;
+};
+
 export function computeAllState(payload: { rM: string; rF: string; rLive: string; rSet: string; hasTotalError: boolean; hasPartialError: boolean }) {
   const { rM, rF, rLive, rSet, hasTotalError, hasPartialError } = payload;
 
@@ -48,36 +79,8 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
     const qualified = arr
       .filter((p) => isQualifiedAthlete(p, isAllTime))
       .sort(sortAthletesWithTiebreakers);
-    
-    // Build tiebreaker-aware rank mapping
-    const buildRankMap = (qualifiedArr: PlayerProfile[]) => {
-      const rm = new Map<string, number>();
-      let currRank = 1;
-      let prevPts = -1;
-      let prevRuns = -1;
-      let prevDate = -1;
-      
-      qualifiedArr.forEach((q, i) => {
-        const pts = q.pts || 0;
-        const sends = q.sends || 0;
-        const date = q.latestRunDate?.getTime() || Infinity;
 
-        const diffPts = pts !== prevPts;
-        const diffRuns = sends !== prevRuns;
-        const diffDate = date !== prevDate;
-        
-        if (diffPts || diffRuns || diffDate) {
-          currRank = i + 1;
-          prevPts = pts;
-          prevRuns = sends;
-          prevDate = date;
-        }
-        rm.set(q.pKey, currRank);
-      });
-      return rm;
-    };
-    
-    const rankMap = buildRankMap(qualified);
+    const rankMap = buildTieAwareRankMap(qualified);
 
     arr.forEach((p) => {
       const rankVal = rankMap.has(p.pKey) ? rankMap.get(p.pKey)! : "UR";
@@ -443,6 +446,11 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
     p.sets = atMet[p.pKey]?.sets || setterMet[p.pKey]?.sets || 0;
   });
 
+  season26Data.forEach((p: any) => {
+    p.contributionScore = atMet[p.pKey]?.contributionScore || 0;
+    p.sets = atMet[p.pKey]?.sets || setterMet[p.pKey]?.sets || 0;
+  });
+
   settersWithImpact.forEach((s: any) => {
     const pKey = s.pKey || normalizeName(s.name);
     s.contributionScore = atMet[pKey]?.contributionScore || setterMet[pKey]?.contributionScore || 0;
@@ -579,35 +587,8 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       .filter((p: PlayerProfile) => p.gender === "F" && isQualifiedAthlete(p, mode))
       .sort(sortAthletesWithTiebreakers);
       
-    const buildRankMap = (qualifiedArr: PlayerProfile[]) => {
-      const rm = new Map<string, number>();
-      let currRank = 1;
-      let prevPts = -1;
-      let prevRuns = -1;
-      let prevDate = -1;
-      
-      qualifiedArr.forEach((q, i) => {
-        const pts = q.pts || 0;
-        const sends = q.sends || 0;
-        const date = q.latestRunDate?.getTime() || Infinity;
-
-        const diffPts = pts !== prevPts;
-        const diffRuns = sends !== prevRuns;
-        const diffDate = date !== prevDate;
-        
-        if (diffPts || diffRuns || diffDate) {
-          currRank = i + 1;
-          prevPts = pts;
-          prevRuns = sends;
-          prevDate = date;
-        }
-        rm.set(q.pKey, currRank);
-      });
-      return rm;
-    }
-
-    const rankMapM = buildRankMap(qualifiedM);
-    const rankMapF = buildRankMap(qualifiedF);
+    const rankMapM = buildTieAwareRankMap(qualifiedM);
+    const rankMapF = buildTieAwareRankMap(qualifiedF);
 
     const mapM: Record<string, PlayerProfile> = {};
     const mapF: Record<string, PlayerProfile> = {};
@@ -615,8 +596,6 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       const rank = p.gender === "M" 
         ? rankMapM.get(p.pKey) || "UR" 
         : rankMapF.get(p.pKey) || "UR";
-        
-      const metadata = atMet?.[p.pKey] || {};
         
       const stats = { 
         ...p, 
@@ -651,8 +630,14 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       }
     });
 
-    const fQual = qual.map((p, i) => ({ ...p, currentRank: i + 1, isQualified: true, shouldFade: false }));
-    const fUnranked = unranked.map((p, i) => ({ ...p, currentRank: "UR", isQualified: false, shouldFade: true }));
+    const qualRankMap = buildTieAwareRankMap(qual);
+    const fQual = qual.map((p, i) => ({
+      ...p,
+      currentRank: qualRankMap.get(p.pKey) ?? i + 1,
+      isQualified: true,
+      shouldFade: false,
+    }));
+    const fUnranked = unranked.map((p) => ({ ...p, currentRank: "UR", isQualified: false, shouldFade: true }));
     
     const dividerLabel = (mode === "open" || mode === false) ? "SEND 3+ CHALLENGES TO GET RANKED" : "SEND 3+ CHALLENGES TO GET RANKED";
     
@@ -700,51 +685,50 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
   const skillRecords_M_2026: Record<string, unknown> = {};
   const skillRecords_F_2026: Record<string, unknown> = {};
 
-  const computeRecords = (sourceSector: Record<string, unknown> | undefined, rawBestSector: Record<string, unknown> | undefined, cName: string, allTimeSourceSector?: Record<string, unknown>) => {
-    const source = (sourceSector?.[cName] || {}) as Record<string, unknown>;
-    
-    // Find the record using the all-time source if available, otherwise fallback to the current source
-    const atSource = (allTimeSourceSector?.[cName] || source) as Record<string, unknown>;
-    const atTimes = Object.values(atSource) as number[];
-    const record = atTimes.length > 0 ? Math.min(...atTimes) : 0;
-    
-    const runsForSkill = (skillRunsHistory?.[cName] || []) as Record<string, unknown>[];
+  const computeRecords = (sourceSector: Record<string, unknown> | undefined, rawBestSector: Record<string, unknown> | undefined, cName: string) => {
+    const normC = String(cName).toUpperCase();
+    const source = (sourceSector?.[cName] || sourceSector?.[normC] || {}) as Record<string, unknown>;
+    const runsForSkill = (skillRunsHistory?.[normC] || skillRunsHistory?.[cName] || []) as Record<string, unknown>[];
+    const skillMetaObj = (cMet?.[normC] || cMet?.[cName]) as { points?: number } | undefined;
+    const skillPoints = Number(skillMetaObj?.points) || 0;
 
     const sorted = Object.entries(source)
       .map(([pKey, time]: [string, unknown]) => {
         const num = typeof time === "number" ? time : parseFloat(time as string) || 0;
         const isInterim = isPlaceholderPlayer(pKey);
-        
-        const send = runsForSkill.find(r => r.pKey === pKey && Math.abs((r.time as number) - num) < 0.001);
-        
-        const skillPoints = Number((cMet?.[cName] as any)?.points) || 0;
+
+        const rawEntry = (rawBestSector?.[pKey] as Record<string, { videoUrl?: string; date?: string | null }>)?.[normC] ||
+          (rawBestSector?.[pKey] as Record<string, { videoUrl?: string; date?: string | null }>)?.[cName];
+        const send = runsForSkill.find(r => r.pKey === pKey && Math.abs((r.time as number) - num) < 0.001) ||
+          runsForSkill.find(r => r.pKey === pKey);
+
         return {
           pKey,
           time: num,
           pts: skillPoints,
-          videoUrl: (rawBestSector?.[pKey] as Record<string, Record<string, { videoUrl?: string }>>)?.[cName]?.videoUrl,
-          date: send?.date,
+          videoUrl: rawEntry?.videoUrl,
+          date: rawEntry?.date ?? send?.date,
           isInterim,
           name: isInterim ? "INTERIM TOP TIME" : undefined
         };
       })
       .sort((a, b) => {
-        if (Math.abs(b.pts - a.pts) > 0.001) {
-          return b.pts - a.pts;
-        }
+        if (a.isInterim && !b.isInterim) return -1;
+        if (!a.isInterim && b.isInterim) return 1;
         const aDate = a.date ? (parseSafeDate(a.date as string)?.getTime() ?? Infinity) : Infinity;
         const bDate = b.date ? (parseSafeDate(b.date as string)?.getTime() ?? Infinity) : Infinity;
-        return aDate - bDate;
+        if (aDate !== bDate) return aDate - bDate;
+        const aName = String(atMet?.[a.pKey]?.name || dnMap?.[a.pKey] || a.pKey || "").toUpperCase();
+        const bName = String(atMet?.[b.pKey]?.name || dnMap?.[b.pKey] || b.pKey || "").toUpperCase();
+        return aName.localeCompare(bName);
       });
 
     let currentRank = 1;
-    let prevTime = -1;
     let prevDate = -1;
     return sorted.map((r, i) => {
       const rDate = r.date ? (parseSafeDate(r.date as string)?.getTime() ?? Infinity) : Infinity;
-      if (r.time !== prevTime || rDate !== prevDate) {
+      if (i === 0 || rDate !== prevDate) {
         currentRank = i + 1;
-        prevTime = r.time;
         prevDate = rDate;
       }
       return { ...r, rank: currentRank };
@@ -753,12 +737,12 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
 
   masterSkillList.forEach((c) => {
     const name = c.name;
-    skillRecords_M_AT[name] = computeRecords(lbAT?.M, atRawBest, name, lbAT?.M);
-    skillRecords_F_AT[name] = computeRecords(lbAT?.F, atRawBest, name, lbAT?.F);
-    skillRecords_M_OP[name] = computeRecords(lbOpen?.M, opRawBest, name, lbAT?.M);
-    skillRecords_F_OP[name] = computeRecords(lbOpen?.F, opRawBest, name, lbAT?.F);
-    skillRecords_M_2026[name] = computeRecords(lbSeason26?.M, season26RawBest, name, lbAT?.M);
-    skillRecords_F_2026[name] = computeRecords(lbSeason26?.F, season26RawBest, name, lbAT?.F);
+    skillRecords_M_AT[name] = computeRecords(lbAT?.M, atRawBest, name);
+    skillRecords_F_AT[name] = computeRecords(lbAT?.F, atRawBest, name);
+    skillRecords_M_OP[name] = computeRecords(lbOpen?.M, opRawBest, name);
+    skillRecords_F_OP[name] = computeRecords(lbOpen?.F, opRawBest, name);
+    skillRecords_M_2026[name] = computeRecords(lbSeason26?.M, season26RawBest, name);
+    skillRecords_F_2026[name] = computeRecords(lbSeason26?.F, season26RawBest, name);
   });
 
   return {

@@ -18,9 +18,10 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
 
   const queryMode = searchParams.get("mode");
   const pathMode = location.pathname.includes("/teams") ? "teams" : (location.pathname.includes("/gyms") ? "gyms" : (location.pathname.includes("/players") ? "players" : null));
-  const initialMode = pathMode || (queryMode === "teams" ? "teams" : "players");
+  const initialMode: "players" | "gyms" | "teams" =
+    pathMode || (queryMode === "teams" ? "teams" : queryMode === "gyms" ? "gyms" : "players");
 
-  const [mode, setMode] = useState<"players" | "teams">(initialMode);
+  const [mode, setMode] = useState<"players" | "gyms" | "teams">(initialMode);
 
   useEffect(() => {
     if (queryMode === "teams" || queryMode === "gyms" || queryMode === "players") {
@@ -43,8 +44,9 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
   }, [navigateToEntity]);
 
   const handleTeamClick = React.useCallback((t: TeamProfile) => {
-    navigateToEntity("team", t);
-  }, [navigateToEntity]);
+    const entityType = t.category === "gyms" || mode === "gyms" ? "gym" : "team";
+    navigateToEntity(entityType, t);
+  }, [navigateToEntity, mode]);
 
   const playerColumns = React.useMemo(() => [
     {

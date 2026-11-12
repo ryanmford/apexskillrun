@@ -126,7 +126,9 @@ export const InspectorBody = React.memo(
                   ? "Challenge Not Found"
                   : type === "setter"
                     ? "Setter Not Found"
-                    : "Entity Not Found"}
+                    : type === "team" || type === "gym"
+                      ? "Team Not Found"
+                      : "Entity Not Found"}
             </h2>
             <p
               className={cn(
@@ -176,6 +178,7 @@ export const InspectorBody = React.memo(
         );
         break;
       case "team":
+      case "gym":
         content = (
           <TeamDetails
             team={finalData}
