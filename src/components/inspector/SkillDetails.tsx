@@ -450,7 +450,7 @@ export const SkillDetails = React.memo(
             }}
           >
             <Play size={16} strokeWidth={2.5} />
-            <span>RULES</span>
+            <span>DEMO</span>
           </ASRStandardButton>
         </div>
 

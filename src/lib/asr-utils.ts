@@ -972,8 +972,8 @@ export const toggleRatingTierParam = (currentParam: string | null | undefined, c
     nextSet.add(clickedTierId);
   }
 
-  // If 0 selected or all 5 tiers selected, return "all"
-  if (nextSet.size === 0 || nextSet.size === allTierIds.length) {
+  // If 0 selected, return "all" (unfiltered)
+  if (nextSet.size === 0) {
     return "all";
   }
 
