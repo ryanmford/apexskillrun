@@ -16,6 +16,7 @@ export interface ASRPremiumButtonProps {
  disabled?: boolean;
  radius?: "none" | "2xl" | "3xl" | "full";
  effect?: "neon" | "metallic" | "none";
+ as?: "button" | "a" | "div";
 }
 
 export const ASRPremiumButton = ({
@@ -31,8 +32,9 @@ export const ASRPremiumButton = ({
  disabled = false,
  radius = "2xl",
  effect = "neon",
+ as,
 }: ASRPremiumButtonProps) => {
- const Component = href && !disabled ? "a" : "button";
+ const Component: React.ElementType = as || (href && !disabled ? "a" : "button");
  const isSolid = variant === "solid";
 
  const getRadiusClass = () => {
@@ -121,9 +123,7 @@ export const ASRPremiumButton = ({
 
  return (
  <Component
- href={!disabled ? href : undefined}
- target={!disabled ? target : undefined}
- rel={!disabled ? rel : undefined}
+ {...(Component === "a" && !disabled ? { href, target, rel } : {})}
  onClick={!disabled ? onClick : undefined}
  {...(Component === "button" && disabled ? { disabled: true } : {})}
  className={cn(

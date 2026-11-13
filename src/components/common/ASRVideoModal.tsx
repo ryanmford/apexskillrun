@@ -5,13 +5,71 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAppStore } from "../../store/useAppStore";
 import { cn } from "../../lib/asr-utils";
 
-function getYouTubeId(url: string | null) {
-  if (!url) return null;
+type ParsedVideoSource =
+  | { kind: "iframe"; embedUrl: string; title: string }
+  | { kind: "video"; src: string }
+  | { kind: "external" };
+
+function parseVideoSource(url: string | null): ParsedVideoSource {
+  if (!url) return { kind: "external" };
   const cleaned = url.trim();
-  const regExp =
-    /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = cleaned.match(regExp);
-  return match && match[2].length === 11 ? match[2] : null;
+  if (!cleaned) return { kind: "external" };
+
+  // 1. YouTube (watch, youtu.be, shorts, embed, live, v/)
+  const ytMatch = cleaned.match(
+    /^.*(?:youtu\.be\/|v\/|u\/\w\/|embed\/|live\/|watch\?v=|&v=|shorts\/)([a-zA-Z0-9_-]{11})(?:[#&?].*)?$/,
+  );
+  if (ytMatch?.[1]) {
+    return {
+      kind: "iframe",
+      embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1&color=white&vq=hd1080`,
+      title: "YouTube video player",
+    };
+  }
+
+  // 2. Direct raw video files (.mp4, .webm, .mov, .m4v)
+  if (/\.(?:mp4|webm|mov|m4v)(?:[?#].*)?$/i.test(cleaned)) {
+    return {
+      kind: "video",
+      src: cleaned,
+    };
+  }
+
+  // 3. Google Drive video preview
+  const driveMatch = cleaned.match(
+    /drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/i,
+  );
+  if (driveMatch?.[1]) {
+    return {
+      kind: "iframe",
+      embedUrl: `https://drive.google.com/file/d/${driveMatch[1]}/preview`,
+      title: "Google Drive video player",
+    };
+  }
+
+  // 4. Vimeo
+  const vimeoMatch = cleaned.match(/(?:player\.)?vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeoMatch?.[1]) {
+    return {
+      kind: "iframe",
+      embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&playsinline=1`,
+      title: "Vimeo video player",
+    };
+  }
+
+  // 5. Instagram Reel / Post / TV
+  const igMatch = cleaned.match(
+    /instagram\.com\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/([a-zA-Z0-9_-]+)/i,
+  );
+  if (igMatch?.[1]) {
+    return {
+      kind: "iframe",
+      embedUrl: `https://www.instagram.com/p/${igMatch[1]}/embed/`,
+      title: "Instagram video player",
+    };
+  }
+
+  return { kind: "external" };
 }
 
 export const ASRVideoModal = () => {
@@ -19,34 +77,47 @@ export const ASRVideoModal = () => {
   const setPlayingVideoUrl = useAppStore((s) => s.setPlayingVideoUrl);
   const [internalUrl, setInternalUrl] = useState(playingVideoUrl);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMediaError, setHasMediaError] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   const isOpen = !!playingVideoUrl;
-  const youtubeId = getYouTubeId(internalUrl);
+  const parsedSource = parseVideoSource(internalUrl);
 
   // Sync internal URL
   useEffect(() => {
     if (playingVideoUrl) {
       setInternalUrl(playingVideoUrl);
       setIsLoading(true);
+      setHasMediaError(false);
     }
   }, [playingVideoUrl]);
 
+  const closingExplicitlyRef = useRef(false);
   const lastState = useRef(
-    (location.state as Record<string, unknown>)?.videoModal,
+    Boolean((location.state as Record<string, unknown>)?.videoModal),
   );
 
   useEffect(() => {
-    const isVideoModalInHistory = (location.state as Record<string, unknown>)
-      ?.videoModal;
+    if (!isOpen) {
+      closingExplicitlyRef.current = false;
+    }
+  }, [isOpen]);
 
-    if (isOpen && !isVideoModalInHistory) {
+  useEffect(() => {
+    const isVideoModalInHistory = Boolean(
+      (location.state as Record<string, unknown>)?.videoModal,
+    );
+
+    if (isOpen && !isVideoModalInHistory && !closingExplicitlyRef.current) {
       if (lastState.current) {
         setPlayingVideoUrl(null);
       } else {
         navigate(location.pathname + location.search, {
-          state: { ...location.state, videoModal: true },
+          state: {
+            ...((location.state as Record<string, unknown>) || {}),
+            videoModal: true,
+          },
           replace: false,
         });
       }
@@ -63,14 +134,19 @@ export const ASRVideoModal = () => {
   ]);
 
   const handleClose = useCallback(() => {
-    const isVideoModalInHistory = (location.state as Record<string, unknown>)
-      ?.videoModal;
-    if (isVideoModalInHistory) {
-      navigate(-1);
-    } else {
-      setPlayingVideoUrl(null);
+    closingExplicitlyRef.current = true;
+    setPlayingVideoUrl(null);
+
+    const stateObj = (location.state as Record<string, unknown>) || {};
+    if (stateObj.videoModal) {
+      const restState = { ...stateObj };
+      delete restState.videoModal;
+      navigate(location.pathname + location.search, {
+        state: restState,
+        replace: true,
+      });
     }
-  }, [location.state, navigate, setPlayingVideoUrl]);
+  }, [location.pathname, location.search, location.state, navigate, setPlayingVideoUrl]);
 
   const isVerticalOptimized = true;
 
@@ -94,6 +170,8 @@ export const ASRVideoModal = () => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, handleClose]);
+
+  const showEmbed = !hasMediaError && parsedSource.kind !== "external";
 
   return (
     <AnimatePresence>
@@ -121,7 +199,7 @@ export const ASRVideoModal = () => {
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.5}
-            onDragEnd={(e, info) => {
+            onDragEnd={(_e, info) => {
               if (info.offset.y > 100) handleClose();
             }}
             className={cn(
@@ -132,7 +210,7 @@ export const ASRVideoModal = () => {
             )}
             style={isVerticalOptimized ? {} : { aspectRatio: "16/9" }}
           >
-            {/* Overlay Gradient for Close Button (Ensures it's visible over the video) */}
+            {/* Overlay Gradient for Close Button */}
             <div className="absolute top-0 inset-x-0 z-20 h-40 bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-none" />
 
             {/* Close Button */}
@@ -141,6 +219,7 @@ export const ASRVideoModal = () => {
               style={{ top: "max(1rem, env(safe-area-inset-top, 2rem))" }}
             >
               <button
+                type="button"
                 onClick={handleClose}
                 className="w-14 h-14 sm:w-12 sm:h-12 rounded-full flex items-center justify-center bg-black/60 text-white hover:bg-black transition-all pointer-events-auto border border-white/10 backdrop-blur-xl shadow-lg group active:scale-95 touch-none"
                 aria-label="Close video"
@@ -153,28 +232,52 @@ export const ASRVideoModal = () => {
               </button>
             </div>
 
-            {youtubeId ? (
+            {showEmbed ? (
               <div className="w-full h-full relative flex-1 flex items-center justify-center rounded-none sm:rounded-[32px] overflow-hidden bg-black mt-0">
                 {isLoading && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white/50">
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white/50 pointer-events-none">
                     <Loader2 className="w-8 h-8 animate-spin mb-4 text-white/80" />
                     <span className="text-sm font-medium uppercase tracking-widest">
                       Loading Video
                     </span>
                   </div>
                 )}
-                <iframe
-                  onLoad={() => setIsLoading(false)}
-                  className={cn(
-                    "absolute inset-0 w-[100%] h-[100%] transition-opacity duration-500",
-                    isLoading ? "opacity-0" : "opacity-100",
-                  )}
-                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1&color=white&vq=hd1080`}
-                  title="YouTube video player"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  frameBorder="0"
-                />
+                {parsedSource.kind === "video" ? (
+                  <video
+                    src={parsedSource.src}
+                    controls
+                    autoPlay
+                    playsInline
+                    preload="metadata"
+                    onLoadedData={() => setIsLoading(false)}
+                    onCanPlay={() => setIsLoading(false)}
+                    onError={() => {
+                      setIsLoading(false);
+                      setHasMediaError(true);
+                    }}
+                    className={cn(
+                      "w-full h-full object-contain bg-black transition-opacity duration-300",
+                      isLoading ? "opacity-0" : "opacity-100",
+                    )}
+                  />
+                ) : (
+                  <iframe
+                    onLoad={() => setIsLoading(false)}
+                    onError={() => {
+                      setIsLoading(false);
+                      setHasMediaError(true);
+                    }}
+                    className={cn(
+                      "absolute inset-0 w-[100%] h-[100%] transition-opacity duration-500",
+                      isLoading ? "opacity-0" : "opacity-100",
+                    )}
+                    src={parsedSource.embedUrl}
+                    title={parsedSource.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    frameBorder="0"
+                  />
+                )}
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-12 min-h-[300px] z-10 relative bg-zinc-950">

@@ -71,18 +71,47 @@ function toCodePoint(unicodeSurrogates: string) {
   return r.filter(cp => cp !== 'fe0f').join('-');
 }
 
+const MAX_TILE_CACHE_KEYS = 500;
 const tileCache = new Map<string, string>();
+
+let cachedFontData: Buffer | null = null;
+async function getInterFontData(): Promise<Buffer> {
+  if (cachedFontData) return cachedFontData;
+  cachedFontData = await fs.readFile(
+    path.join(
+      process.cwd(),
+      "node_modules",
+      "@fontsource",
+      "inter",
+      "files",
+      "inter-latin-700-normal.woff",
+    ),
+  );
+  return cachedFontData;
+}
+
 async function fetchTile(url: string) {
-  if (tileCache.has(url)) return tileCache.get(url);
+  if (tileCache.has(url)) {
+    const existing = tileCache.get(url)!;
+    tileCache.delete(url);
+    tileCache.set(url, existing);
+    return existing;
+  }
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const dataUri = `data:image/png;base64,${buffer.toString('base64')}`;
+    const dataUri = `data:image/png;base64,${buffer.toString("base64")}`;
+    if (tileCache.size >= MAX_TILE_CACHE_KEYS) {
+      const oldestKey = tileCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        tileCache.delete(oldestKey);
+      }
+    }
     tileCache.set(url, dataUri);
     return dataUri;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -91,35 +120,44 @@ async function getMapTiles(coords: [number, number] | null) {
   if (!coords) return [];
   const [lat, lon] = coords;
   const Z = 13;
-  const centerTx = (lon + 180) / 360 * Math.pow(2, Z);
-  const centerTy = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, Z);
-  
+  const centerTx = ((lon + 180) / 360) * Math.pow(2, Z);
+  const centerTy =
+    ((1 -
+      Math.log(
+        Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180),
+      ) /
+        Math.PI) /
+      2) *
+    Math.pow(2, Z);
+
   const TILE_SIZE = 256;
   const svgX = centerTx * TILE_SIZE - 600;
   const svgY = centerTy * TILE_SIZE - 315;
-  
+
   const startTx = Math.floor(svgX / TILE_SIZE);
   const endTx = Math.floor((svgX + 1200) / TILE_SIZE);
-  
+
   const startTy = Math.floor(svgY / TILE_SIZE);
   const endTy = Math.floor((svgY + 630) / TILE_SIZE);
-  
-  const tiles = [];
+
+  const tiles: Array<{ url: string; x: number; y: number; dataUri?: string | null }> = [];
   for (let tx = startTx; tx <= endTx; tx++) {
     for (let ty = startTy; ty <= endTy; ty++) {
       tiles.push({
         url: `https://a.basemaps.cartocdn.com/dark_nolabels/${Z}/${tx}/${ty}.png`,
         x: tx * TILE_SIZE - svgX,
-        y: ty * TILE_SIZE - svgY
+        y: ty * TILE_SIZE - svgY,
       });
     }
   }
-  
-  for (const t of tiles) {
-    (t as any).dataUri = await fetchTile(t.url);
-  }
-  
-  return tiles.filter((t: any) => !!t.dataUri);
+
+  await Promise.all(
+    tiles.map(async (t) => {
+      t.dataUri = await fetchTile(t.url);
+    }),
+  );
+
+  return tiles.filter((t) => !!t.dataUri);
 }
 
 function getOgImageSvg(title: string, desc: string, type?: 'player' | 'skill', stats?: {value: string, label: string}[], mapTiles?: any[]) {
@@ -408,30 +446,32 @@ async function startServer() {
       
       let type: any;
       let stats: {value: string, label: string}[] | undefined;
+      let mapCoords: [number, number] | null = null;
       let mapTiles: any[] = [];
       
       if (reqPath) {
         const searchParams = new URLSearchParams(reqQuery || "");
-        const meta = await getPageMeta(reqPath, searchParams);
+        const meta = await getPageMeta(reqPath, searchParams, false);
         title = meta.title?.toUpperCase();
         desc = meta.description?.toUpperCase();
         type = meta.ogType;
         stats = meta.ogStats?.map(s => ({ value: s.value?.toUpperCase(), label: s.label?.toUpperCase() }));
-        if (meta.ogMapCoords) {
-           mapTiles = await getMapTiles(meta.ogMapCoords);
-        }
+        mapCoords = meta.ogMapCoords || null;
       }
 
-      const cachedBuffer = ogCache.get(title, desc + JSON.stringify(stats));
+      const cacheDescKey = `${desc}||${JSON.stringify(stats || null)}||${JSON.stringify(mapCoords)}`;
+      const cachedBuffer = ogCache.get(title, cacheDescKey);
       if (cachedBuffer) {
         res.setHeader('Content-Type', 'image/png');
         res.setHeader('Cache-Control', 'public, max-age=86400');
         return res.send(cachedBuffer);
       }
 
-      const fontData = await fs.readFile(
-        path.join(process.cwd(), 'node_modules', '@fontsource', 'inter', 'files', 'inter-latin-700-normal.woff')
-      );
+      const [fontData, resolvedTiles] = await Promise.all([
+        getInterFontData(),
+        mapCoords ? getMapTiles(mapCoords) : Promise.resolve([]),
+      ]);
+      mapTiles = resolvedTiles;
 
       const svg = await satori(
         getOgImageSvg(title, desc, type, stats, mapTiles),
@@ -456,7 +496,7 @@ async function startServer() {
                   const text = await res.text();
                   return `data:image/svg+xml;base64,${Buffer.from(text).toString('base64')}`;
                 }
-              } catch (e) {
+              } catch {
                 // ignore
               }
             }
@@ -471,14 +511,14 @@ async function startServer() {
       });
 
       const pngBuffer = resvg.render().asPng();
-      ogCache.set(title, desc + JSON.stringify(stats), pngBuffer);
+      ogCache.set(title, cacheDescKey, pngBuffer);
 
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=86400');
       res.send(pngBuffer);
     } catch (error) {
       console.error('OG Image Error:', error);
-      res.status(500).send(error.stack || error.toString());
+      res.status(500).send('Failed to generate OG image');
     }
   });
 

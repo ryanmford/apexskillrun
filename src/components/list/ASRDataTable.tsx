@@ -173,7 +173,7 @@ export const ASRDataTable = React.memo(
    if (isHovering) {
      prefetchEntity();
      if (enableHoverSync) {
-       setActiveSkillId((item?.id as string) || (item?.pKey as string) || (item?.name as string) || null);
+       setActiveSkillId((item?.name as string) || (item?.id as string) || (item?.pKey as string) || null);
      }
    } else if (enableHoverSync) {
      setActiveSkillId(null);
@@ -319,7 +319,14 @@ export const ASRDataTable = React.memo(
   }
 
  return (
- <div className="flex flex-col w-full pb-32">
+ <div
+   className="flex flex-col w-full pb-32"
+   onPointerLeave={(e) => {
+     if (enableHoverSync && e.pointerType === "mouse") {
+       setActiveSkillId(null);
+     }
+   }}
+ >
  {showRankings && (
  <div
  className={cn(
@@ -327,12 +334,16 @@ export const ASRDataTable = React.memo(
  theme === "dark"
  ? "text-white/35 border-white/5"
  : "text-zinc-900/50 border-black/5",
- viewType === "card" ? (isCompact ? cn("pl-3 mx-4", showVideoColumn ? "pr-1.5" : "pr-3.5") : "pl-3 sm:pl-6 lg:pl-8 pr-1.5 sm:pr-4 mx-4") : "mx-4",
+ viewType === "card"
+ ? isCompact
+ ? cn("pl-3 mx-4", showVideoColumn ? "pr-3" : "pr-3.5")
+ : cn("pl-3 sm:pl-6 lg:pl-8 mx-4", showVideoColumn ? "pr-3 sm:pr-5" : "pr-3.5 sm:pr-6")
+ : "mx-4",
  )}
  >
  {viewType === "card" ? (
-          <div className={cn("flex items-center min-w-0 pr-1 flex-1", isCompact ? "gap-2" : "gap-2 sm:gap-4 lg:gap-6")}>
-            <div className="w-6 sm:w-10 lg:w-12 shrink-0 flex items-center justify-center text-center">RANK</div>
+          <div className={cn("flex items-center min-w-0 pr-2 sm:pr-3 flex-1", isCompact ? "gap-2.5 sm:gap-3" : "gap-3 sm:gap-4 lg:gap-6")}>
+            <div className={cn("shrink-0 flex items-center justify-center text-center", isCompact ? "w-8 sm:w-9" : "w-8 sm:w-10 lg:w-12")}>RANK</div>
             <div className="flex items-center min-w-0 flex-1 text-left">{middleLabel}</div>
           </div>
         ) : (
@@ -352,8 +363,8 @@ export const ASRDataTable = React.memo(
      ? c.width
      : viewType === "card"
        ? isCompact
-         ? "min-w-[50px]"
-         : "min-w-[50px] sm:min-w-[80px] lg:min-w-[120px]"
+         ? "min-w-[54px]"
+         : "min-w-[54px] sm:min-w-[80px] lg:min-w-[120px]"
        : "w-20 sm:w-24 lg:w-32 px-1 sm:px-4 lg:px-6";
 
    if (c.onHeaderClick) {
@@ -388,7 +399,7 @@ export const ASRDataTable = React.memo(
      </div>
    );
  })}
- {showVideoColumn && <div className={cn("shrink-0", viewType === "card" ? (isCompact ? "w-7 ml-1.5" : "w-10 sm:w-12 ml-2 sm:ml-3") : "w-10 sm:w-16 lg:w-20 pr-4 sm:pr-6 lg:pr-8 ml-2")} />}
+ {showVideoColumn && <div className={cn("shrink-0", viewType === "card" ? (isCompact ? "w-8 sm:w-9 ml-2 sm:ml-2.5" : "w-10 sm:w-11 ml-2 sm:ml-3") : "w-9 sm:w-10 mr-4 sm:mr-6 lg:mr-8 ml-2")} />}
  </div>
  </div>
  )}

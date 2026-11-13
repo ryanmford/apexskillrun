@@ -8,7 +8,7 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
-import { useLocation, useNavigate, Routes, Route, Navigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams, Routes, Route, Navigate } from "react-router-dom";
 import {
   AlertCircle,
 } from "lucide-react";
@@ -56,6 +56,15 @@ import {
   useInspectorData,
 } from "./hooks/useDerivedData";
 import { useFetchASRData } from "./hooks/useASRData";
+
+function LegacyMapRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  const target = id
+    ? `/challenges/${encodeURIComponent(id)}${location.search}`
+    : `/challenges${location.search}`;
+  return <Navigate to={target} replace state={location.state} />;
+}
 
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -133,6 +142,16 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
 
   const inspectorDataObj = useInspectorData() || { current: null, history: [], historyIndex: -1 };
   const inspectorData = inspectorDataObj.current;
+  const setActiveSkillId = useAppStore((s) => s.setActiveSkillId);
+
+  const isChallengeInspectorOpen = inspectorData?.type === "challenge";
+  const prevChallengeInspectorOpenRef = React.useRef(isChallengeInspectorOpen);
+  useEffect(() => {
+    if (prevChallengeInspectorOpenRef.current && !isChallengeInspectorOpen) {
+      setActiveSkillId(null);
+    }
+    prevChallengeInspectorOpenRef.current = isChallengeInspectorOpen;
+  }, [isChallengeInspectorOpen, setActiveSkillId]);
 
   const view = backgroundLocation.pathname.split("/")[1] || "rankings";
 
@@ -282,7 +301,7 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
                     <HomeView />
                   </motion.div>
                 } />
-                <Route path="/map/:id?" element={<Navigate to="/challenges" replace />} />
+                <Route path="/map/:id?" element={<LegacyMapRedirect />} />
                 <Route path="/challenges/:id?" element={
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }} className="flex-1 flex flex-col">
                     <MapSkillsView theme={theme} />
@@ -385,6 +404,8 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
             onEntityClick={navigateToEntity}
             theme={theme}
             initialMode={(inspectorData as { options?: { initialMode?: "all-time" } })?.options?.initialMode}
+            isNotFound={(inspectorData as { isNotFound?: boolean })?.isNotFound}
+            requestedId={(inspectorData as { requestedId?: string })?.requestedId}
           />
         </React.Suspense>
         </RouteErrorBoundary>

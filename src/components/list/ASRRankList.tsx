@@ -34,6 +34,7 @@ interface ASRRankListProps {
   padTo?: number;
   isCompact?: boolean;
   hideStats?: boolean;
+  hideRank?: boolean;
   scrollElementRef?: React.RefObject<HTMLElement | null>;
 }
 
@@ -52,8 +53,10 @@ export const ASRRankList = ({
   padTo = 0,
   isCompact = true,
   hideStats = false,
+  hideRank,
   scrollElementRef,
 }: ASRRankListProps) => {
+  const shouldHideRank = hideRank ?? entityType === "challenge";
   const theme = useContext(ThemeContext);
   const modalScrollRef = useContext(ModalScrollContext);
   const { atMet = {}, cMet = {} } = dataContext;
@@ -309,7 +312,10 @@ export const ASRRankList = ({
               }
 
               const skillMeta =
-                cMet[String(pKey).toUpperCase()] || item.rawSkill || {};
+                cMet[String(pKey).toUpperCase()] ||
+                (item as any).skillMeta ||
+                (item as any).rawSkill ||
+                {};
 
               const titleStr = isUnclaimedItem
                 ? "--"
@@ -340,11 +346,13 @@ export const ASRRankList = ({
                       variant="card"
                       isCompact={isCompact}
                       rank={
-                        isArray
-                          ? i + 1
-                          : item.rank ||
-                            item.currentRank ||
-                            (isUnclaimedItem ? i + 1 : "UR")
+                        shouldHideRank
+                          ? null
+                          : isArray
+                            ? (item[3] ?? i + 1)
+                            : item.rank ||
+                              item.currentRank ||
+                              (isUnclaimedItem ? i + 1 : "UR")
                       }
                       title={titleStr}
                       isUnclaimed={isUnclaimedItem || (item as any).isInterim}
@@ -353,12 +361,17 @@ export const ASRRankList = ({
                         isUnclaimedItem ? (
                           "--"
                         ) : hideSubtitle ? null : showDateSubtitle ? (
-                          (item as any).date ? (
-                            <span className="flex items-center gap-1">
-                              <Calendar size={10} className="opacity-70" />{" "}
-                              {formatYYYYMMDD(parseSafeDate((item as any).date) || new Date((item as any).date))}
-                            </span>
-                          ) : null
+                          (() => {
+                            const rawDate = (item as any).date || (item as any).dateSet;
+                            const parsedDate = rawDate ? parseSafeDate(String(rawDate)) : null;
+                            if (!parsedDate) return null;
+                            return (
+                              <span className="inline-flex items-center gap-1.5 tabular-nums leading-none">
+                                <Calendar size={11} className="opacity-70 shrink-0" />
+                                <span>{formatYYYYMMDD(parsedDate)}</span>
+                              </span>
+                            );
+                          })()
                         ) : (
                           (() => {
                             const locText = isArray
@@ -388,7 +401,11 @@ export const ASRRankList = ({
                       flag={getCombinedFlags(item, meta)}
                       stats={stats}
                       videoUrl={
-                        explicitVideoUrl || item.videoUrl || item.demoVideo
+                        explicitVideoUrl ||
+                        item.videoUrl ||
+                        item.demoVideo ||
+                        skillMeta.demoVideo ||
+                        skillMeta.videoUrl
                       }
                       mapUrl={
                         item.mapUrl ||

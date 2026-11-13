@@ -72,11 +72,26 @@ export const AnimatedListView = React.memo(({
     const term = normalizeForSearch(String(debouncedSearch || ""));
     if (!term) return data;
     const searchTerms = term.split(/[\s,]+/).filter(Boolean);
-    return data.filter((item: any) => {
+    const rawMatches = data.filter((item: any) => {
       if (item?.isDivider) return true;
       const key = item?.searchKey || "";
       return searchTerms.every((t: string) => key.includes(t));
     });
+
+    // Remove leading, trailing, and consecutive dividers so empty or single-bucket searches never render orphan dividers
+    const cleaned: any[] = [];
+    for (const item of rawMatches) {
+      if (item?.isDivider) {
+        if (cleaned.length === 0 || cleaned[cleaned.length - 1]?.isDivider) {
+          continue;
+        }
+      }
+      cleaned.push(item);
+    }
+    while (cleaned.length > 0 && cleaned[cleaned.length - 1]?.isDivider) {
+      cleaned.pop();
+    }
+    return cleaned;
   }, [debouncedSearch, data]);
 
   return (

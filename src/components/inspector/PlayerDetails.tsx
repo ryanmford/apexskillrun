@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { ASRWeeklyActivityChart } from "./ASRWeeklyActivityChart";
@@ -75,14 +75,33 @@ export const PlayerDetails = React.memo(
     const eventTypeMode = searchParams.get("eventType");
     const validModes = ["open", "all-time", "2026"];
     
-    let initialModeSafe: "all-time" | "2026" = "all-time";
+    let initialModeSafe: "open" | "all-time" | "2026" = "all-time";
     if (validModes.includes(urlMode as string)) {
-      initialModeSafe = urlMode as "all-time" | "2026";
+      initialModeSafe = urlMode as "open" | "all-time" | "2026";
     } else if (validModes.includes(eventTypeMode as string)) {
-      initialModeSafe = eventTypeMode as "all-time" | "2026";
+      initialModeSafe = eventTypeMode as "open" | "all-time" | "2026";
     }
-    const [uiMode, setUiMode] = useState<"all-time" | "2026">(initialModeSafe);
-    const [contentMode, setContentMode] = useState<"all-time" | "2026">(initialModeSafe);
+    const [uiMode, setUiMode] = useState<"open" | "all-time" | "2026">(initialModeSafe);
+    const [contentMode, setContentMode] = useState<"open" | "all-time" | "2026">(initialModeSafe);
+
+    useEffect(() => {
+      if (urlTab && validTabs.includes(urlTab)) {
+        setUiTab(urlTab);
+        setContentTab(urlTab);
+      }
+    }, [urlTab]);
+
+    useEffect(() => {
+      const nextMode = validModes.includes(urlMode as string)
+        ? (urlMode as "open" | "all-time" | "2026")
+        : validModes.includes(eventTypeMode as string)
+          ? (eventTypeMode as "open" | "all-time" | "2026")
+          : null;
+      if (nextMode) {
+        setUiMode(nextMode);
+        setContentMode(nextMode);
+      }
+    }, [urlMode, eventTypeMode]);
 
     const urlSort = searchParams.get("sort");
     const urlDir = searchParams.get("dir");
@@ -94,9 +113,10 @@ export const PlayerDetails = React.memo(
 
     const setSortState = (cat: string, dir: string) => {
       setSearchParams(prev => {
-        prev.set("sort", cat);
-        prev.set("dir", dir);
-        return prev;
+        const next = new URLSearchParams(prev);
+        next.set("sort", cat);
+        next.set("dir", dir);
+        return next;
       }, { replace: true, state: location.state, preventScrollReset: true });
     };
 
@@ -177,6 +197,31 @@ export const PlayerDetails = React.memo(
       return sorted;
     }, [rankListRuns, sortCategory, sortDirection]);
 
+    const sortedRankListSets = useMemo(() => {
+      const sorted = [...rankListSets];
+      sorted.sort((a: any, b: any) => {
+        const rawDateA = a.date || a.dateSet;
+        const rawDateB = b.date || b.dateSet;
+        const aDate = rawDateA ? (parseSafeDate(rawDateA)?.getTime() || 0) : 0;
+        const bDate = rawDateB ? (parseSafeDate(rawDateB)?.getTime() || 0) : 0;
+        const aPts = Number(a.pts ?? a.points ?? 0);
+        const bPts = Number(b.pts ?? b.points ?? 0);
+
+        if (sortCategory === "date") {
+          const primary = aDate - bDate;
+          if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
+          if (bPts !== aPts) return bPts - aPts;
+          return String(a.name || "").localeCompare(String(b.name || ""));
+        } else {
+          const primary = aPts - bPts;
+          if (primary !== 0) return sortDirection === "desc" ? -primary : primary;
+          if (bDate !== aDate) return bDate - aDate;
+          return String(a.name || "").localeCompare(String(b.name || ""));
+        }
+      });
+      return sorted;
+    }, [rankListSets, sortCategory, sortDirection]);
+
     const memberSince = useMemo(() => {
       const dates: Date[] = [];
       allRuns.forEach((r: Record<string, unknown>) => {
@@ -251,6 +296,14 @@ export const PlayerDetails = React.memo(
                 React.startTransition(() => {
                   setContentTab(t);
                 });
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set("tab", t);
+                    return next;
+                  },
+                  { replace: true, state: location.state, preventScrollReset: true },
+                );
                 scrollToTop();
               }}
               layoutId="profile-tabs"
@@ -289,6 +342,14 @@ export const PlayerDetails = React.memo(
                     React.startTransition(() => {
                       setContentMode(nextMode);
                     });
+                    setSearchParams(
+                      (prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.set("mode", nextMode);
+                        return next;
+                      },
+                      { replace: true, state: location.state, preventScrollReset: true },
+                    );
                     scrollToTop();
                   }}
                   layoutId="player-mode-pill"
@@ -403,7 +464,7 @@ export const PlayerDetails = React.memo(
                     : "border-black/[0.05] bg-white",
                 )}
               >
-                <div className="grid grid-cols-2 gap-3 px-4 py-6 overflow-visible">
+                <div className="grid grid-cols-2 gap-2.5 px-4 py-6 overflow-visible">
                   {[
                     (() => {
                       const computedLevel = getSetterLevel(setterInfo?.impact || 0, setterInfo?.sets || 0);
@@ -442,10 +503,19 @@ export const PlayerDetails = React.memo(
                       label: "🪙",
                       value: (meta.contributionScore || 0).toFixed(2),
                     },
-                  ].map((s) => (
-                    <div key={s.label} className="flex">
+                  ].map((s, i) => (
+                    <motion.div
+                      key={s.label}
+                      className="flex"
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{
+                        delay: i * 0.05,
+                        duration: 0.3,
+                      }}
+                    >
                       <ASRStatCard label={s.label} value={s.value} />
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
@@ -455,14 +525,39 @@ export const PlayerDetails = React.memo(
               </div>
 
               <div className="p-6 flex flex-col gap-6 pt-6 relative min-h-[300px]">
-                <SectionTitle>VERIFIED SETS</SectionTitle>
-                {rankListSets.length > 0 ? (
+                <div className="flex items-center justify-between">
+                  <SectionTitle noPadding>VERIFIED SETS</SectionTitle>
+                  <div
+                    className={cn(
+                      "flex items-center rounded-full border text-[10px] font-black uppercase tracking-widest",
+                      theme === "dark" ? "border-white/10 bg-zinc-900/50" : "border-black/10 bg-zinc-100/50"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSortState(sortCategory === "points" ? "date" : "points", "desc")}
+                      className="px-3 py-1.5 hover:opacity-70 active:scale-95 transition-all uppercase"
+                    >
+                      {sortCategory}
+                    </button>
+                    <div className={cn("w-px h-3", theme === "dark" ? "bg-white/20" : "bg-black/20")} />
+                    <button
+                      type="button"
+                      onClick={() => setSortState(sortCategory, sortDirection === "desc" ? "asc" : "desc")}
+                      className="px-2 py-1.5 hover:opacity-70 active:scale-95 transition-all flex items-center justify-center"
+                    >
+                      <ArrowDown size={14} className={cn("transition-transform duration-200", sortDirection === "asc" ? "rotate-180" : "")} />
+                    </button>
+                  </div>
+                </div>
+                {sortedRankListSets.length > 0 ? (
                   <ASRRankList
-                    athletes={rankListSets}
-                    valueLabel="SENDS"
+                    athletes={sortedRankListSets}
+                    valueLabel="PTS"
                     onEntityClick={onEntityClick}
                     dataContext={dataContext}
-                    hideSubtitle={true}
+                    hideSubtitle={false}
+                    showDateSubtitle={true}
                     entityType="challenge"
                   />
                 ) : (

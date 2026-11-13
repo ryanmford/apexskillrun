@@ -43,6 +43,7 @@ export const InspectorBody = React.memo(
     isNotFound,
     requestedId,
   }: InspectorBodyProps) => {
+    const isLoading = useDataStore((s) => s.isLoading);
     const dataCore = useDataStore((s) => s.data);
     const atPerfs = useDataStore((s) => s.atPerfs);
     const opPerfs = useDataStore((s) => s.opPerfs);
@@ -106,6 +107,15 @@ export const InspectorBody = React.memo(
     const finalData = data || item;
     const finalMode = initialMode || options?.initialMode;
 
+    const isHydrating =
+      isLoading &&
+      (!dataCore || dataCore.length === 0) &&
+      (!masterSkillList || masterSkillList.length === 0);
+
+    if (isHydrating) {
+      return <DetailsSkeleton />;
+    }
+
     if (isNotFound) {
       return (
         <div className="flex flex-col items-center justify-center p-6 sm:p-10 text-center min-h-[60vh]">
@@ -126,9 +136,11 @@ export const InspectorBody = React.memo(
                   ? "Challenge Not Found"
                   : type === "setter"
                     ? "Setter Not Found"
-                    : type === "team" || type === "gym"
-                      ? "Team Not Found"
-                      : "Entity Not Found"}
+                    : type === "gym"
+                      ? "Gym Not Found"
+                      : type === "team"
+                        ? "Team Not Found"
+                        : "Entity Not Found"}
             </h2>
             <p
               className={cn(

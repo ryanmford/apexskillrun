@@ -115,8 +115,12 @@ export const ASRListItem = React.memo(
  <ItemWrapper
  onClick={onClick}
  role={onClick ? "button" : undefined} 
- onMouseEnter={() => onHover && onHover(true)} 
- onMouseLeave={() => onHover && onHover(false)}
+ onPointerEnter={(e: React.PointerEvent) => {
+   if (e.pointerType === "mouse" && onHover) onHover(true);
+ }}
+ onPointerLeave={(e: React.PointerEvent) => {
+   if (e.pointerType === "mouse" && onHover) onHover(false);
+ }}
  tabIndex={onClick ? 0 : undefined}
  onKeyDown={(e) => {
  if (onClick && (e.key === "Enter" || e.key === " ")) {
@@ -134,23 +138,29 @@ export const ASRListItem = React.memo(
  )}
  >
  <div className="w-16 sm:w-24 lg:w-32 pl-3 sm:pl-10 lg:pl-12 shrink-0 flex items-center justify-center">
- {mapUrl ? (
+ {rank !== undefined && rank !== null ? (
+ <div className="scale-100 sm:scale-125 lg:scale-150 origin-center flex items-center justify-center">
+ <ASRRankBadge rank={rank} />
+ </div>
+ ) : mapUrl ? (
  <a
  href={mapUrl.startsWith('http') ? mapUrl : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapUrl)}`}
  target="_blank"
  rel="noopener noreferrer"
  onClick={(e) => e.stopPropagation()}
- className={THEME.ICON_BUTTON(theme)}
+ className={cn(
+   "w-9 h-9 sm:w-10 sm:h-10 rounded-full transition-all active:scale-90 text-zinc-500 hover:text-blue-500 flex items-center justify-center shrink-0",
+   theme === "dark" ? "hover:bg-white/[0.06]" : "hover:bg-black/[0.05]",
+ )}
+ title="Open in Google Maps"
  >
  <MapPin
- className="w-5 h-5 "
- strokeWidth={2.5}
+ className="w-5 h-5"
+ strokeWidth={2.25}
  />
  </a>
  ) : (
- <div className="scale-100 sm:scale-125 lg:scale-150 origin-center">
- <ASRRankBadge rank={rank} />
- </div>
+ <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0" aria-hidden="true" />
  )}
  </div>
  <div className="flex-1 flex min-w-0 h-full items-center">
@@ -241,11 +251,7 @@ export const ASRListItem = React.memo(
  })}
  </div>
  {showVideoIcon && (
- <div
- className={cn(
- "flex items-center justify-center shrink-0 w-10 sm:w-16 lg:w-20 pr-4 sm:pr-6 lg:pr-8 ml-2",
- )}
- >
+ <div className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shrink-0 mr-4 sm:mr-6 lg:mr-8 ml-2">
  {videoUrl ? (
  <button
  type="button"
@@ -258,16 +264,18 @@ export const ASRListItem = React.memo(
  });
  setPlayingVideoUrl(videoUrl);
  }}
- className={THEME.ICON_BUTTON(theme)}
+ className={cn(
+   "w-full h-full rounded-full transition-all active:scale-90 text-zinc-500 hover:text-blue-500 flex items-center justify-center",
+   theme === "dark" ? "hover:bg-white/[0.06]" : "hover:bg-black/[0.05]",
+ )}
+ title="Watch Video"
  >
  <Play
- className="w-[16px] h-[16px] sm:w-[20px] sm:h-[20px] lg:w-[24px] lg:h-[24px]"
- strokeWidth={3}
+ className="w-[18px] h-[18px] sm:w-5 sm:h-5"
+ strokeWidth={2.5}
  />
  </button>
- ) : (
- <div className="w-[16px] h-[16px] sm:w-[20px] sm:h-[20px] lg:w-[24px] lg:h-[24px]" />
- )}
+ ) : null}
  </div>
  )}
  </ItemWrapper>
@@ -278,8 +286,12 @@ export const ASRListItem = React.memo(
  <ItemWrapper
  onClick={isUnclaimed ? undefined : onClick}
  role={onClick && !isUnclaimed ? "button" : undefined} 
- onMouseEnter={() => onHover && onHover(true)} 
- onMouseLeave={() => onHover && onHover(false)}
+ onPointerEnter={(e: React.PointerEvent) => {
+   if (e.pointerType === "mouse" && onHover) onHover(true);
+ }}
+ onPointerLeave={(e: React.PointerEvent) => {
+   if (e.pointerType === "mouse" && onHover) onHover(false);
+ }}
  tabIndex={onClick && !isUnclaimed ? 0 : undefined}
  onKeyDown={(e) => {
  if (onClick && !isUnclaimed && (e.key === "Enter" || e.key === " ")) {
@@ -290,8 +302,11 @@ export const ASRListItem = React.memo(
  className={cn(
  "group flex items-center justify-between transition-all duration-300 ios-clip-fix outline-none text-left w-full",
  isCompact
- ? cn("py-3 pl-3 rounded-[1.25rem] border h-auto min-h-[64px]", showVideoIcon ? "pr-1.5" : "pr-3.5")
- : "py-3 sm:py-5 lg:py-6 pl-3 sm:pl-6 lg:pl-8 pr-1.5 sm:pr-4 rounded-[1.25rem] sm:rounded-[1.5rem] lg:rounded-[2rem] border h-auto min-h-[64px] sm:min-h-[80px] lg:min-h-[100px] ",
+ ? cn("py-3 pl-3 rounded-[1.25rem] border h-auto min-h-[66px]", showVideoIcon ? "pr-3" : "pr-3.5")
+ : cn(
+     "py-3 sm:py-5 lg:py-6 pl-3 sm:pl-6 lg:pl-8 rounded-[1.25rem] sm:rounded-[1.5rem] lg:rounded-[2rem] border h-auto min-h-[64px] sm:min-h-[80px] lg:min-h-[100px]",
+     showVideoIcon ? "pr-3 sm:pr-5" : "pr-3.5 sm:pr-6",
+   ),
  onClick && !isUnclaimed
  ? `cursor-pointer active:scale-95 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 ${"theme-focus"} ${cardHover}`
  : "cursor-default",
@@ -307,45 +322,56 @@ export const ASRListItem = React.memo(
  >
  <div
  className={cn(
- "flex items-center min-w-0 pr-1 flex-1",
- isCompact ? "gap-2" : "gap-2 sm:gap-4 lg:gap-6",
+ "flex items-center min-w-0 pr-2 sm:pr-3 flex-1",
+ isCompact ? "gap-2.5 sm:gap-3" : "gap-3 sm:gap-4 lg:gap-6",
  )}
  >
  {icon ? (
- <div className={`p-0 rounded-xl transition-colors shrink-0`}>
+ <div className="p-0 rounded-xl transition-colors shrink-0">
  {icon}
  </div>
  ) : (
- <div className="w-6 sm:w-10 lg:w-12 shrink-0 flex items-center justify-center">
-                   {mapUrl ? (
+ <div
+ className={cn(
+ "shrink-0 flex items-center justify-center",
+ isCompact ? "w-8 sm:w-9" : "w-8 sm:w-10 lg:w-12",
+ )}
+ >
+ {rank !== undefined && rank !== null ? (
+ <div className="scale-100 sm:scale-125 lg:scale-150 origin-center flex items-center justify-center">
+ <ASRRankBadge rank={rank} />
+ </div>
+ ) : mapUrl ? (
  <a
  href={mapUrl.startsWith('http') ? mapUrl : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapUrl)}`}
  target="_blank"
  rel="noopener noreferrer"
  onClick={(e) => e.stopPropagation()}
- className={THEME.ICON_BUTTON(theme)}
+ className={cn(
+   "rounded-full transition-all active:scale-90 text-zinc-500 hover:text-blue-500 flex items-center justify-center shrink-0",
+   theme === "dark" ? "hover:bg-white/[0.06]" : "hover:bg-black/[0.05]",
+   isCompact ? "w-8 h-8 sm:w-9 sm:h-9" : "w-9 h-9 sm:w-10 sm:h-10",
+ )}
+ title="Open in Google Maps"
  >
  <MapPin
- className={cn("w-5 h-5", !isCompact && " sm:w-6 sm:h-6 lg:w-8 lg:h-8")}
- strokeWidth={2.5}
+ className={cn(isCompact ? "w-[18px] h-[18px]" : "w-5 h-5 sm:w-6 sm:h-6")}
+ strokeWidth={2.25}
  />
  </a>
  ) : (
- <div className="scale-100 sm:scale-125 lg:scale-150 origin-center"><ASRRankBadge rank={rank} /></div>
+ <div
+ className={cn("shrink-0", isCompact ? "w-8 h-8 sm:w-9 sm:h-9" : "w-9 h-9 sm:w-10 sm:h-10")}
+ aria-hidden="true"
+ />
  )}
  </div>
  )}
- <div className="flex flex-col min-w-0 text-left">
+ <div className="flex flex-col justify-center min-w-0 flex-1 text-left">
  <div
  className={cn(
- "flex items-center",
- isCompact ? "gap-1" : "gap-1 sm:gap-2",
- )}
- >
- <div
- className={cn(
- "flex items-center font-black uppercase whitespace-normal leading-tight transition-colors line-clamp-2",
- isCompact ? "text-[13px] sm:text-[14px]" : "text-[14px] sm:text-[18px] lg:text-[22px]",
+ "flex items-start min-w-0 font-black uppercase leading-tight transition-colors",
+ isCompact ? "text-[13px] sm:text-[14px] gap-1.5" : "text-[14px] sm:text-[18px] lg:text-[22px] gap-1.5 sm:gap-2",
  isUnclaimed
  ? theme === "dark"
  ? "text-zinc-300"
@@ -355,30 +381,25 @@ export const ASRListItem = React.memo(
  : "text-zinc-900",
  )}
  >
- <div className="line-clamp-2">
  {flag && (
- <span
- className={cn(
- "shrink-0",
- isCompact ? "mr-1" : "mr-1 ",
- )}
- >
+ <span className="shrink-0 leading-tight select-none">
  {formatFlagsWithSpace(flag)}
  </span>
  )}
+ <span className="line-clamp-2 min-w-0 break-words leading-tight">
  {title}
- </div>
+ </span>
  {badgeContent && (
- <div className="flex items-center gap-1 shrink-0 ml-1.5 scale-[0.65] origin-left">
+ <div className="flex items-center gap-1 shrink-0 ml-1 scale-[0.65] origin-left self-center">
  {badgeContent}
  </div>
  )}
  </div>
- </div>
- <div className="flex flex-col mt-0.5">
+ {subtitle !== undefined && subtitle !== null && subtitle !== false && (
+ <div className="flex flex-col mt-1">
  <div
  className={cn(
- "font-black uppercase whitespace-normal break-words line-clamp-2",
+ "font-black uppercase whitespace-normal break-words line-clamp-2 leading-tight",
  isCompact ? "text-[11px] sm:text-[12px]" : "text-[12px] sm:text-[14px] lg:text-[16px]",
  isUnclaimed
  ? theme === "dark"
@@ -392,6 +413,7 @@ export const ASRListItem = React.memo(
  {subtitle}
  </div>
  </div>
+ )}
  </div>
  </div>
  <div className="flex items-center pr-0 shrink-0 h-full">
@@ -401,7 +423,7 @@ export const ASRListItem = React.memo(
      (c: { isRank?: boolean; type?: string }) => !c.isRank && c.type !== "profile",
    )[idx];
    return (
-   <div key={idx} className={cn("flex flex-col items-end justify-center h-full shrink-0", (colDef as any)?.width || (isCompact ? "min-w-[50px]" : "min-w-[50px] sm:min-w-[80px] lg:min-w-[120px]"))}>
+   <div key={idx} className={cn("flex flex-col items-end justify-center h-full shrink-0", (colDef as any)?.width || (isCompact ? "min-w-[54px]" : "min-w-[54px] sm:min-w-[80px] lg:min-w-[120px]"))}>
  <span
  className={cn(
  THEME.VALUE, "tabular-nums",
@@ -444,7 +466,7 @@ export const ASRListItem = React.memo(
  <div
  className={cn(
  "flex items-center justify-center shrink-0",
- isCompact ? "w-7 ml-1.5" : "w-10 sm:w-12 ml-2 sm:ml-3",
+ isCompact ? "w-8 h-8 sm:w-9 sm:h-9 ml-2 sm:ml-2.5" : "w-10 h-10 sm:w-11 sm:h-11 ml-2 sm:ml-3",
  )}
  >
  {videoUrl ? (
@@ -459,24 +481,18 @@ export const ASRListItem = React.memo(
  });
  setPlayingVideoUrl(videoUrl);
  }}
- className={THEME.ICON_BUTTON(theme)}
+ className={cn(
+   "w-full h-full rounded-full transition-all active:scale-90 text-zinc-500 hover:text-blue-500 flex items-center justify-center",
+   theme === "dark" ? "hover:bg-white/[0.06]" : "hover:bg-black/[0.05]",
+ )}
+ title="Watch Video"
  >
  <Play
- className={cn(
- "w-[20px] h-[20px]",
- !isCompact && " ",
- )}
- strokeWidth={3}
+ className={cn(isCompact ? "w-[18px] h-[18px]" : "w-5 h-5")}
+ strokeWidth={2.5}
  />
  </button>
- ) : (
- <div
- className={cn(
- "w-[20px] h-[20px]",
- !isCompact && " ",
- )}
- />
- )}
+ ) : null}
  </div>
  )}
  </div>
@@ -488,6 +504,7 @@ export const ASRListItem = React.memo(
  if (prev.title !== next.title) return false;
  if (prev.subtitle !== next.subtitle) return false;
  if (prev.variant !== next.variant) return false;
+ if (prev.isCompact !== next.isCompact) return false;
  if (prev.videoUrl !== next.videoUrl) return false;
  if (prev.flag !== next.flag) return false;
  if (prev.shouldFade !== next.shouldFade) return false;
@@ -497,6 +514,9 @@ export const ASRListItem = React.memo(
  if (prev.icon !== next.icon) return false;
  if (prev.badgeContent !== next.badgeContent) return false;
  if (prev.isHighlighted !== next.isHighlighted) return false;
+ if (prev.onClick !== next.onClick) return false;
+ if (prev.onHover !== next.onHover) return false;
+ if (prev.columns !== next.columns) return false;
 
  // Check array lengths
  if (prev.stats?.length !== next.stats?.length) return false;

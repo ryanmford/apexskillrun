@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { normalizeName } from "../lib/asr-utils";
+import { parseSafeDate } from "../lib/asr-data";
 import { Zap, Medal, Waypoints } from "lucide-react";
 import { PlayerProfile, TeamProfile, ASRDataContext, SetterProfile } from "../types";
 
@@ -112,33 +113,91 @@ export const usePlayerDetailsData = (
         const normName = String(name).toUpperCase();
         const mc = masterSkillList.find(
           (challenge: { name?: string }) => String(challenge.name).toUpperCase() === normName,
-        );
+        ) as Record<string, any> | undefined;
+        const historyRuns = (skillRunsHistory[normName] || []) as Record<string, any>[];
         const skillRuns =
           mc?.totalAllTimeRuns ||
-          (skillRunsHistory[normName] || []).length ||
+          historyRuns.length ||
           Object.keys(lbAT_Skills.M?.[name] || {}).length +
             Object.keys(lbAT_Skills.F?.[name] || {}).length;
+
+        const datedRuns = historyRuns
+          .filter((r) => !r?.isInterim && r?.date && parseSafeDate(String(r.date)))
+          .sort(
+            (a, b) =>
+              (parseSafeDate(String(a.date))?.getTime() ?? Infinity) -
+              (parseSafeDate(String(b.date))?.getTime() ?? Infinity),
+          );
+
+        const datedRunsWithVideo = datedRuns.filter((r) => Boolean(r.videoUrl));
+        const anyRunWithVideo = historyRuns.find((r) => !r?.isInterim && Boolean(r?.videoUrl));
+        const resolvedVideoUrl =
+          datedRunsWithVideo[0]?.videoUrl ||
+          c.demoVideo ||
+          c.videoUrl ||
+          mc?.videoUrl ||
+          anyRunWithVideo?.videoUrl ||
+          "";
+
+        const parsedDateSet = c.dateSet && parseSafeDate(String(c.dateSet)) ? String(c.dateSet) : null;
+        const resolvedDate = parsedDateSet || (datedRuns[0]?.date ? String(datedRuns[0].date) : null);
+        const ptsVal = Number(c.points ?? 0);
+
         return {
           name,
           ...c,
+          pts: ptsVal,
+          points: ptsVal,
+          videoUrl: resolvedVideoUrl,
+          date: resolvedDate,
           role: isLead ? "LEAD" : "ASSIST",
           sends: skillRuns,
           impact: skillRuns,
         };
       })
-      .sort((a: { sends: number }, b: { sends: number }) => b.sends - a.sends);
+      .sort((a: { pts: number; date?: string | null; sends: number }, b: { pts: number; date?: string | null; sends: number }) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        const aTime = a.date ? (parseSafeDate(a.date)?.getTime() || 0) : 0;
+        const bTime = b.date ? (parseSafeDate(b.date)?.getTime() || 0) : 0;
+        if (bTime !== aTime) return bTime - aTime;
+        return b.sends - a.sends;
+      });
   }, [cMet, pKey, lbAT_Skills, skillRunsHistory, masterSkillList]);
 
   const rankListSets = useMemo(() => {
-    return skillsSet.map((s: { length?: string | number, dateSet?: string, name?: string, rating?: number }) => ({
-      ...s,
-      athleteSlug: s.name,
-      pKey: s.name,
-    }));
+    let currentRank = 1;
+    return skillsSet.map(
+      (
+        s: {
+          length?: string | number;
+          dateSet?: string;
+          date?: string | null;
+          name?: string;
+          rating?: number;
+          pts?: number;
+          videoUrl?: string;
+          sends: number;
+        },
+        i: number,
+      ) => {
+        if (i > 0 && s.pts !== skillsSet[i - 1].pts) {
+          currentRank = i + 1;
+        }
+        return {
+          ...s,
+          rank: currentRank,
+          athleteSlug: s.name,
+          pKey: s.name,
+        };
+      },
+    );
   }, [skillsSet]);
 
   const mappedSetsChartData = useMemo(() => {
-    return skillsSet.map((s: { length?: string | number, dateSet?: string, name?: string, rating?: number }) => ({ ...s, date: s.dateSet }));
+    return skillsSet.map((s: { length?: string | number; dateSet?: string; date?: string | null; name?: string; rating?: number }) => ({
+      ...s,
+      date: s.date || s.dateSet,
+    }));
   }, [skillsSet]);
 
   const calculatedAvgLength = useMemo(() => {
@@ -364,14 +423,38 @@ export const useTeamDetailsData = (
   );
 
   const playerTuples = useMemo(() => {
-    return players.map((p: PlayerProfile & { contribution?: number }) => [
-      p.pKey || normalizeName(p.name),
-      p.contribution,
-    ]);
+    let currentRank = 1;
+    return players.map((p: PlayerProfile & { contribution?: number }, i: number) => {
+      const val = Math.round((p.contribution || 0) * 100);
+      const prevVal =
+        i > 0 ? Math.round((players[i - 1].contribution || 0) * 100) : val;
+      if (i > 0 && val !== prevVal) {
+        currentRank = i + 1;
+      }
+      return [
+        p.pKey || normalizeName(p.name),
+        p.contribution,
+        undefined,
+        currentRank,
+      ];
+    });
   }, [players]);
 
   const setterTuples = useMemo(() => {
-    return setters.map((s: SetterProfile) => [s.pKey || normalizeName(s.name), s.impact]);
+    let currentRank = 1;
+    return setters.map((s: SetterProfile, i: number) => {
+      const val = s.impact || 0;
+      const prevVal = i > 0 ? setters[i - 1].impact || 0 : val;
+      if (i > 0 && val !== prevVal) {
+        currentRank = i + 1;
+      }
+      return [
+        s.pKey || normalizeName(s.name),
+        s.impact,
+        undefined,
+        currentRank,
+      ];
+    });
   }, [setters]);
 
   const vaultItems = useMemo(() => {

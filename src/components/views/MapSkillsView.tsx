@@ -19,6 +19,7 @@ import {
   parseRatingRangesList,
   toggleRatingTierParam,
   parseSearchQueryWithRating,
+  createSlug,
 } from "../../lib/asr-utils";
 import { normalizeForSearch } from "../../lib/utils";
 import { ChevronLeft, ChevronRight, X, Compass } from "lucide-react";
@@ -127,6 +128,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   }, [sortMode, setSortMode]);
 
   const clearAllFilters = React.useCallback(() => {
+    setActiveSkillId(null);
     startTransition(() => {
       setSearchParams(prev => {
         prev.delete(searchKey);
@@ -135,7 +137,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         return prev;
       }, { replace: true, state: location.state });
     });
-  }, [setSearchParams, location.state, searchKey]);
+  }, [setActiveSkillId, setSearchParams, location.state, searchKey]);
 
   const columns = React.useMemo(() => {
     const isLvlSort = sortMode === "easiest" || sortMode === "hardest";
@@ -309,11 +311,21 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         lastAutoOpenedQueryRef.current = textQuery;
         setSnap(0.5);
         setActiveSkillId(activeSkills[0].name || null);
+      } else if (lastAutoOpenedQueryRef.current) {
+        lastAutoOpenedQueryRef.current = "";
+        setActiveSkillId(null);
       }
-    } else if (!textQuery) {
+    } else if (!textQuery && lastAutoOpenedQueryRef.current) {
       lastAutoOpenedQueryRef.current = "";
+      setActiveSkillId(null);
     }
   }, [textQuery, searchedData, setActiveSkillId, setSnap]);
+
+  React.useEffect(() => {
+    return () => {
+      setActiveSkillId(null);
+    };
+  }, [setActiveSkillId]);
 
   // Step 3: Filter to visible map bounds, apply active sort mode, and re-index currentRank (1, 2, 3...)
   const visibleData = useMemo(() => {
@@ -367,7 +379,9 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   }, [navigateToEntity]);
 
   const handlePinClick = React.useCallback((c: SkillData) => {
-     setActiveSkillId(c.name || null);
+     if (c.name && createSlug(c.name)) {
+       setActiveSkillId(c.name);
+     }
      navigateToEntity("challenge", c);
   }, [navigateToEntity, setActiveSkillId]);
 

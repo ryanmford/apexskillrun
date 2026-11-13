@@ -1,7 +1,7 @@
  
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { PlayerProfile, SkillData, SetterProfile, TeamProfile, ASRDataContext } from "../types";
-import { CONFIG, getContinentData, isPlaceholderPlayer, normalizeName, isQualifiedAthlete } from "./asr-utils.ts";
+import { CONFIG, fixCountryEntity, getContinentData, isPlaceholderPlayer, normalizeName, isQualifiedAthlete } from "./asr-utils.ts";
 import {
   processRankingData,
   processLiveFeedData,
@@ -506,6 +506,12 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       itemsToProcess.forEach((item) => {
         const rawName = String(item.name || "").trim();
         const normName = normalizeName(rawName);
+        const locText = item.location && item.location !== "UNKNOWN" ? item.location : "";
+        const countryEntity = fixCountryEntity(locText, item.flag || "");
+        const countrySearch =
+          countryEntity.name && countryEntity.name !== CONFIG.FALLBACKS.UNKNOWN_LOCATION
+            ? countryEntity.name
+            : "";
         if (!aggregated[normName]) {
           aggregated[normName] = {
             name: rawName,
@@ -516,7 +522,7 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
             playersCount: 0,
             bestPlayers: [],
             runsCount: 0,
-            searchKey: normalizeForSearch(`${rawName} ${item.flag}`),
+            searchKey: normalizeForSearch(`${rawName} ${locText} ${countrySearch} ${item.flag}`),
           };
         }
         if (
@@ -526,6 +532,9 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
           item.location !== "UNKNOWN"
         ) {
           aggregated[normName].location = item.location;
+          aggregated[normName].searchKey = normalizeForSearch(
+            `${rawName} ${item.location} ${countrySearch} ${aggregated[normName].flag || item.flag}`,
+          );
         }
         let playerPts = p.pts || 0;
         if (!playerPts || playerPts === 0) {
@@ -645,38 +654,70 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
     return fQual.length && fUnranked.length ? [...fQual, { isDivider: true, label: dividerLabel }, ...fUnranked] : [...fQual, ...fUnranked];
   };
 
-  const computeTeamList = (cat: string, mode: boolean | string) => {
-    const contextStr = mode === "2026" ? "season26" : (mode === true || mode === "all-time" ? "allTime" : "open");
-    let arr = ((teamsAggregated as Record<string, Record<string, (TeamProfile & { pts: number })[]>>)?.[cat]?.[contextStr] || []) as (TeamProfile & { pts: number })[];
-    arr = [...arr].sort((a: TeamProfile & { pts: number }, b: TeamProfile & { pts: number }) => (b.pts || 0) - (a.pts || 0));
-    return arr.map((t: TeamProfile & { pts: number }, i: number) => ({ ...t, currentRank: i + 1, category: cat }));
+  const assignTieRanks = <T,>(
+    items: T[],
+    isSameRank: (prev: T, curr: T) => boolean,
+  ): (T & { currentRank: number })[] => {
+    let activeRank = 1;
+    return items.map((item, idx) => {
+      if (idx > 0 && !isSameRank(items[idx - 1], item)) {
+        activeRank = idx + 1;
+      }
+      return { ...item, currentRank: activeRank };
+    });
   };
 
-  const cListAT = [...masterSkillList]
-    .filter((c: SkillData) => c.isAllTimeSkill)
-    .sort((a: SkillData, b: SkillData) => (b.totalAllTimeRuns || 0) - (a.totalAllTimeRuns || 0))
-    .map((c, i) => ({ ...c, currentRank: i + 1 }));
+  const computeTeamList = (cat: string, mode: boolean | string) => {
+    const contextStr = mode === "2026" ? "season26" : (mode === true || mode === "all-time" ? "allTime" : "open");
+    let arr = ((teamsAggregated as Record<string, Record<string, (TeamProfile & { pts: number; runsCount?: number })[]>>)?.[cat]?.[contextStr] || []) as (TeamProfile & { pts: number; runsCount?: number })[];
+    arr = [...arr].sort((a, b) => (b.pts || 0) - (a.pts || 0) || (b.runsCount || 0) - (a.runsCount || 0));
+    return assignTieRanks(
+      arr.map((t) => ({ ...t, category: cat })),
+      (prev, curr) =>
+        Math.abs((prev.pts || 0) - (curr.pts || 0)) < 1e-6 &&
+        (prev.runsCount || 0) === (curr.runsCount || 0),
+    );
+  };
+
+  const cListAT = assignTieRanks(
+    [...masterSkillList]
+      .filter((c: SkillData) => c.isAllTimeSkill)
+      .sort((a: SkillData, b: SkillData) => (b.totalAllTimeRuns || 0) - (a.totalAllTimeRuns || 0)),
+    (prev, curr) => (prev.totalAllTimeRuns || 0) === (curr.totalAllTimeRuns || 0),
+  );
     
-  const cListOP = masterSkillList
-    .filter((c: SkillData) => c.isOpenSkill)
-    .map((c: SkillData) => {
-      const mCount = Object.keys(lbOpen?.M?.[String(c.name).toUpperCase()] || {}).length;
-      const fCount = Object.keys(lbOpen?.F?.[String(c.name).toUpperCase()] || {}).length;
-      return { ...c, openRuns: mCount + fCount };
-    })
-    .sort((a: any, b: any) => b.openRuns - a.openRuns)
-    .map((c: any, i: number) => ({ ...c, currentRank: i + 1 }));
+  const cListOP = assignTieRanks(
+    masterSkillList
+      .filter((c: SkillData) => c.isOpenSkill)
+      .map((c: SkillData) => {
+        const mCount = Object.keys(lbOpen?.M?.[String(c.name).toUpperCase()] || {}).length;
+        const fCount = Object.keys(lbOpen?.F?.[String(c.name).toUpperCase()] || {}).length;
+        return { ...c, openRuns: mCount + fCount };
+      })
+      .sort((a: any, b: any) => b.openRuns - a.openRuns),
+    (prev: any, curr: any) => prev.openRuns === curr.openRuns,
+  );
     
-  const cList2026 = masterSkillList
-    .filter((c: SkillData) => c.is2026Skill)
-    .map((c: SkillData) => {
-      const mCount = Object.keys(lbSeason26?.M?.[String(c.name).toUpperCase()] || {}).length;
-      const fCount = Object.keys(lbSeason26?.F?.[String(c.name).toUpperCase()] || {}).length;
-      return { ...c, season26Runs: mCount + fCount };
-    })
-    .sort((a: any, b: any) => b.season26Runs - a.season26Runs)
-    .map((c: any, i: number) => ({ ...c, currentRank: i + 1 }));
-  const sList = [...settersWithImpact].sort((a: SetterProfile, b: SetterProfile) => (b.impact || 0) - (a.impact || 0)).map((s, i) => ({ ...s, currentRank: i + 1 }));
+  const cList2026 = assignTieRanks(
+    masterSkillList
+      .filter((c: SkillData) => c.is2026Skill)
+      .map((c: SkillData) => {
+        const mCount = Object.keys(lbSeason26?.M?.[String(c.name).toUpperCase()] || {}).length;
+        const fCount = Object.keys(lbSeason26?.F?.[String(c.name).toUpperCase()] || {}).length;
+        return { ...c, season26Runs: mCount + fCount };
+      })
+      .sort((a: any, b: any) => b.season26Runs - a.season26Runs),
+    (prev: any, curr: any) => prev.season26Runs === curr.season26Runs,
+  );
+  const sList = assignTieRanks(
+    [...settersWithImpact].sort(
+      (a: SetterProfile, b: SetterProfile) =>
+        (b.impact || 0) - (a.impact || 0) || (b.sets || 0) - (a.sets || 0),
+    ),
+    (prev, curr) =>
+      (prev.impact || 0) === (curr.impact || 0) &&
+      (prev.sets || 0) === (curr.sets || 0),
+  );
 
   const skillRecords_M_AT: Record<string, unknown> = {};
   const skillRecords_F_AT: Record<string, unknown> = {};

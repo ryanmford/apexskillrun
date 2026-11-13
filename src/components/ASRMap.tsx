@@ -59,6 +59,9 @@ export const ASRMap = forwardRef(({
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const skillDataRef = useRef<Map<string, SkillData>>(new Map());
   const userMarkerRef = useRef<L.Marker | null>(null);
+  const hoveredMarkerIdRef = useRef<string | null>(null);
+  const prevActiveIdRef = useRef<string | null>(null);
+  const prevIsDarkRenderedRef = useRef<boolean | null>(null);
 
   const fitMapToSkills = React.useCallback(() => {
     if (!mapReady || !mapRef.current || !challenges) return;
@@ -244,7 +247,7 @@ export const ASRMap = forwardRef(({
         const maxR = Math.max(...ratings);
         const rangeLabel = minR === maxR ? `LVL ${minR}` : `LVL ${minR}–${maxR}`;
         clusterHoverHtml = `
-          <div class="absolute bottom-[54px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 group-hover:translate-y-0 scale-95 group-hover:scale-100 z-50 whitespace-nowrap">
+          <div class="absolute bottom-[54px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 pointer-fine:group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 pointer-fine:group-hover:translate-y-0 scale-95 pointer-fine:group-hover:scale-100 z-50 whitespace-nowrap">
             <div class="relative flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md ${tooltipClasses}">
               <span class="text-[10px] font-mono font-black tracking-widest uppercase select-none leading-none">
                 ${rangeLabel}
@@ -256,7 +259,7 @@ export const ASRMap = forwardRef(({
 
       return L.divIcon({
         html: `
-          <div class="relative flex items-center justify-center w-full h-full transition-transform duration-300 hover:scale-110 group cursor-pointer ${outerShadow} rounded-full">
+          <div class="relative flex items-center justify-center w-full h-full transition-transform duration-300 pointer-fine:hover:scale-110 group cursor-pointer ${outerShadow} rounded-full">
             ${clusterHoverHtml}
             <div class="absolute inset-0 rounded-full z-0 animate-border-shift blur-[4px] opacity-60" style="background: ${gradientStyle}; background-size: 200% 100%;"></div>
             <div class="absolute inset-0 rounded-full z-0 animate-border-shift opacity-90" style="background: ${gradientStyle}; background-size: 200% 100%;"></div>
@@ -320,13 +323,27 @@ export const ASRMap = forwardRef(({
       }
     };
 
+    const clearHoveredZIndex = () => {
+      const hoveredId = hoveredMarkerIdRef.current;
+      if (!hoveredId) return;
+      hoveredMarkerIdRef.current = null;
+      const hoveredMarker = markersRef.current.get(hoveredId);
+      if (hoveredMarker) {
+        hoveredMarker.setZIndexOffset(activeSkillIdRef.current === hoveredId ? 1000 : 0);
+      }
+    };
+
     map.on('click', handleMapClick);
     map.on('moveend', triggerBounds);
+    map.on('dragstart', clearHoveredZIndex);
+    map.on('zoomstart', clearHoveredZIndex);
     triggerBounds();
 
     return () => {
       map.off('click', handleMapClick);
       map.off('moveend', triggerBounds);
+      map.off('dragstart', clearHoveredZIndex);
+      map.off('zoomstart', clearHoveredZIndex);
     };
   }, [mapReady]);
 
@@ -430,7 +447,9 @@ export const ASRMap = forwardRef(({
       ? 'bg-zinc-950/95 text-white border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.85)]'
       : 'bg-white/95 text-zinc-950 border-black/15 shadow-[0_4px_16px_rgba(0,0,0,0.15)]';
 
-    const activeOuterClasses = isActive ? 'scale-[1.4] z-[1000] brightness-110' : 'hover:scale-[1.15] active:scale-95 drop-shadow-lg';
+    const activeOuterClasses = isActive
+      ? 'scale-[1.4] z-[1000] brightness-110'
+      : 'pointer-fine:hover:scale-[1.15] active:scale-95 drop-shadow-lg';
     
     const shortName = getSkillDisplayName(skillName);
     const escapedShortName = escapeHtml(shortName);
@@ -440,7 +459,7 @@ export const ASRMap = forwardRef(({
       : "";
 
     const hoverPillHtml = escapedShortName
-      ? `<div class="absolute bottom-[40px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 group-hover:translate-y-0 scale-95 group-hover:scale-100 z-50 whitespace-nowrap">
+      ? `<div class="absolute bottom-[40px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 pointer-fine:group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 pointer-fine:group-hover:translate-y-0 scale-95 pointer-fine:group-hover:scale-100 z-50 whitespace-nowrap">
            <div class="relative flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md ${tooltipClasses}">
              <span class="text-[10px] sm:text-[11px] font-mono font-black tracking-widest uppercase select-none leading-none">
                ${escapedShortName}
@@ -457,7 +476,7 @@ export const ASRMap = forwardRef(({
     const pinTextColor = currentIsDark ? "text-white" : "text-zinc-950";
     const innerContentHtml = hasRating
       ? `<span class="relative z-20 font-mono font-black text-[10px] tracking-tighter leading-none select-none ${pinTextColor}">${ratingInt}</span>`
-      : `<div class="relative z-20 w-1.5 h-1.5 rounded-full ${dotClasses} ${isActive ? 'scale-125' : 'group-hover:scale-125'} transition-all"></div>`;
+      : `<div class="relative z-20 w-1.5 h-1.5 rounded-full ${dotClasses} ${isActive ? 'scale-125' : 'pointer-fine:group-hover:scale-125'} transition-all"></div>`;
 
     return L.divIcon({
       html: `
@@ -512,25 +531,37 @@ export const ASRMap = forwardRef(({
 
       const prevSkill = skillDataRef.current.get(id);
       skillDataRef.current.set(id, c);
-      const isActive = activeSkillId === id;
+      const isActive = activeSkillIdRef.current === id;
 
       if (!markersRef.current.has(id)) {
          const marker = L.marker(c.parsedCoords, {
-            icon: createPinIcon(c, isActive)
+            icon: createPinIcon(c, isActive),
+            keyboard: false,
+            zIndexOffset: isActive ? 1000 : 0,
          });
          (marker as any)._skillRating = Math.round(getSkillRating(c));
 
          marker.on("mouseover", () => {
+            hoveredMarkerIdRef.current = id;
             marker.setZIndexOffset(10000);
          });
 
          marker.on("mouseout", () => {
+            if (hoveredMarkerIdRef.current === id) {
+              hoveredMarkerIdRef.current = null;
+            }
             const isCurrentActive = activeSkillIdRef.current === id;
             marker.setZIndexOffset(isCurrentActive ? 1000 : 0);
          });
 
          marker.on("click", (e) => {
             (e.originalEvent as any)._markerClicked = true;
+            if (hoveredMarkerIdRef.current === id) {
+              hoveredMarkerIdRef.current = null;
+            }
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur();
+            }
             if (!mapRef.current) return;
 
             // Intelligent Panning
@@ -574,18 +605,38 @@ export const ASRMap = forwardRef(({
   // Active Pin State AND Theme updates (re-render icons)
   useEffect(() => {
     if (!mapReady) return;
-    for (const [id, marker] of markersRef.current.entries()) {
-      const isActive = activeSkillId === id;
-      const skillObj = skillDataRef.current.get(id) || id;
-      marker.setIcon(createPinIcon(skillObj, isActive));
-      
-      // Feature: push to top visually
-      if (isActive) {
-        marker.setZIndexOffset(1000);
-      } else {
-        marker.setZIndexOffset(0);
+
+    const themeChanged = prevIsDarkRenderedRef.current !== isDark;
+    const prevActiveId = prevActiveIdRef.current;
+
+    if (themeChanged) {
+      for (const [id, marker] of markersRef.current.entries()) {
+        const isActive = activeSkillId === id;
+        const skillObj = skillDataRef.current.get(id) || id;
+        marker.setIcon(createPinIcon(skillObj, isActive));
+        marker.setZIndexOffset(isActive ? 1000 : 0);
+      }
+    } else if (prevActiveId !== activeSkillId) {
+      if (prevActiveId) {
+        const prevMarker = markersRef.current.get(prevActiveId);
+        if (prevMarker) {
+          const prevSkillObj = skillDataRef.current.get(prevActiveId) || prevActiveId;
+          prevMarker.setIcon(createPinIcon(prevSkillObj, false));
+          prevMarker.setZIndexOffset(hoveredMarkerIdRef.current === prevActiveId ? 10000 : 0);
+        }
+      }
+      if (activeSkillId) {
+        const nextMarker = markersRef.current.get(activeSkillId);
+        if (nextMarker) {
+          const nextSkillObj = skillDataRef.current.get(activeSkillId) || activeSkillId;
+          nextMarker.setIcon(createPinIcon(nextSkillObj, true));
+          nextMarker.setZIndexOffset(1000);
+        }
       }
     }
+
+    prevIsDarkRenderedRef.current = isDark;
+    prevActiveIdRef.current = activeSkillId;
   }, [activeSkillId, isDark, mapReady]); // Depends on isDark so markers redraw with theme
 
   // User Marker theming

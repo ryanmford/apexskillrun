@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { cn, CONFIG, formatLocation, normalizeName, fixCountryEntity, getCombinedFlags } from "../../lib/asr-utils";
 import { ASRStatCard } from "../common/ASRStatCard";
 import { FallbackAvatar } from "../common/FallbackAvatar";
@@ -22,6 +23,8 @@ interface RegionDetailsProps {
 export const RegionDetails = React.memo(
   ({ region, dataContext, onEntityClick, theme }: RegionDetailsProps) => {
     const { atMet = {} } = dataContext || {};
+    const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
 
     const playerList_M_AT = useDataStore((s) => s.playerList_M_AT);
     const playerList_F_AT = useDataStore((s) => s.playerList_F_AT);
@@ -36,7 +39,17 @@ export const RegionDetails = React.memo(
       return pKeys;
     }, [playerList_M_AT, playerList_F_AT]);
 
-    const [activeTab, setActiveTab] = useState("players");
+    const urlTab = searchParams.get("tab");
+    const validTabs = ["players", "challenges"];
+    const [activeTab, setActiveTab] = useState(
+      validTabs.includes(urlTab as string) ? (urlTab as string) : "players",
+    );
+
+    useEffect(() => {
+      if (urlTab && validTabs.includes(urlTab)) {
+        setActiveTab(urlTab);
+      }
+    }, [urlTab]);
 
     const scrollRef = React.useContext(ModalScrollContext);
 
@@ -124,14 +137,22 @@ export const RegionDetails = React.memo(
 
     const regionalSkills = useMemo(() => {
       const allSkills = (dataContext.masterSkillList || []) as any[];
-      return allSkills
+      const sorted = allSkills
         .filter(matchRegion)
-        .map(c => ({
+        .map((c) => ({
           ...c,
           sends: c.totalAllTimeRuns || c.totalRuns || 0,
-          pKey: normalizeName(c.name)
+          pKey: normalizeName(c.name),
         }))
-        .sort((a, b) => (b.sends) - (a.sends));
+        .sort((a, b) => b.sends - a.sends);
+
+      let currentRank = 1;
+      return sorted.map((c, i) => {
+        if (i > 0 && c.sends !== sorted[i - 1].sends) {
+          currentRank = i + 1;
+        }
+        return { ...c, rank: currentRank };
+      });
     }, [dataContext.masterSkillList, region]);
 
     const regionalPlayers = useMemo(() => {
@@ -172,7 +193,7 @@ export const RegionDetails = React.memo(
         if (k) atPlayersMap.set(k, p);
       });
 
-      return Object.values(atMet)
+      const sorted = Object.values(atMet)
         .filter((p: any) => {
           const pKey = p.pKey || normalizeName(p.name);
           if (!allTimeRankedPKeys.has(pKey)) return false;
@@ -192,6 +213,19 @@ export const RegionDetails = React.memo(
           };
         })
         .sort((a: any, b: any) => (b.pts || 0) - (a.pts || 0) || (b.sends || 0) - (a.sends || 0));
+
+      let currentRank = 1;
+      return sorted.map((p: any, i: number) => {
+        if (i > 0) {
+          const prev = sorted[i - 1];
+          const samePts = Math.round((p.pts || 0) * 100) === Math.round((prev.pts || 0) * 100);
+          const sameSends = (p.sends || 0) === (prev.sends || 0);
+          if (!samePts || !sameSends) {
+            currentRank = i + 1;
+          }
+        }
+        return { ...p, rank: currentRank };
+      });
     }, [atMet, dataContext.data, region, regionalSkills, allTimeRankedPKeys]);
 
     return (
@@ -229,6 +263,14 @@ export const RegionDetails = React.memo(
               activeOption={activeTab}
               onChange={(t) => {
                 setActiveTab(t);
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set("tab", t);
+                    return next;
+                  },
+                  { replace: true, state: location.state, preventScrollReset: true },
+                );
                 scrollToTop();
               }}
               layoutId="region-tabs"
@@ -260,6 +302,8 @@ export const RegionDetails = React.memo(
                     athletes={regionalPlayers.map((p: any) => [
                       p.pKey || normalizeName(p.name),
                       p.pts || 0,
+                      undefined,
+                      p.rank,
                     ])}
                     valueLabel="PTS"
                     dataContext={dataContext}

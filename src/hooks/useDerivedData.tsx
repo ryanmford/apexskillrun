@@ -136,6 +136,7 @@ export const useAppNavigation = () => {
 
   const closeModals = useCallback(() => {
     try {
+      useAppStore.getState().setActiveSkillId(null);
       let current = location;
       // Iterate until we find the root location that doesn't have a backgroundLocation
       while (current.state && current.state.backgroundLocation) {
@@ -295,10 +296,12 @@ const getInspectorDataForPath = (
     const hasLoadedTeams = Boolean((gymsAll && gymsAll.length > 0) || (teamsAll && teamsAll.length > 0));
 
     if (viewPrefix === "gyms") {
-      const foundGym = matchTeam(gymsAll) || matchTeam(teamsAll);
-      const resolvedCat = matchTeam(gymsAll) ? "gyms" : matchTeam(teamsAll) ? "teams" : "gyms";
+      const matchedGym = matchTeam(gymsAll);
+      const matchedTeamFallback = !matchedGym ? matchTeam(teamsAll) : undefined;
+      const foundGym = matchedGym || matchedTeamFallback;
+      const resolvedCat = matchedGym ? "gyms" : matchedTeamFallback ? "teams" : "gyms";
       return {
-        type: "team",
+        type: resolvedCat === "gyms" ? "gym" : "team",
         data: foundGym
           ? { ...foundGym, category: resolvedCat }
           : { name: searchKey, category: "gyms" },
@@ -338,7 +341,7 @@ export const useInspectorData = () => {
   const setterMet = useDataStore((s) => s.setterMet as Record<string, SetterProfile>);
   const cMet = useDataStore((s) => s.cMet as Record<string, unknown>);
   const teamsAggregated = useDataStore(
-    (s) => s.teamsAggregated as Record<string, Record<string, TeamProfile[]>>,
+    (s) => s.teamsAggregated as unknown as Record<string, Record<string, TeamProfile[]>>,
   );
 
   // Only recompute when pathname or state changes, ignoring search params/hash

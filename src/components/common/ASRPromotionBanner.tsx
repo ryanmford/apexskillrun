@@ -177,6 +177,7 @@ export const ASRPromotionBanner = React.memo(
  </p>
  <div className="mt-4 flex flex-col items-start gap-4 w-full">
  <ASRPremiumButton
+ as="div"
  theme={theme}
  className="w-full @2xl:w-auto px-4 @md:px-10 max-w-full"
  {...config.btnProps}

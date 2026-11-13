@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import {
   Compass,
@@ -20,6 +20,7 @@ import {
   getSetterLevel,
   getSkillRating,
   getSkillTierConfig,
+  isPlaceholderPlayer,
 } from "../../lib/asr-utils";
 import { parseSafeDate } from "../../lib/asr-data";
 import { useAppStore } from "../../store/useAppStore";
@@ -163,18 +164,21 @@ export const SkillDetails = React.memo(
     const allSkillRuns = useMemo(() => {
       let runList: Record<string, unknown>[] = [];
       if (skillRunsHistory[cName]) {
-        runList = skillRunsHistory[cName].map((r: any) => ({
-          ...r,
-          athlete: atMet[r.pKey]?.name || r.athlete || r.pKey,
-          gender: atMet[r.pKey]?.gender || r.gender || "M",
-          country:
-            atMet[r.pKey]?.countryName || atMet[r.pKey]?.country || r.country,
-          flag: atMet[r.pKey]?.region || atMet[r.pKey]?.flag || r.flag,
-        }));
+        runList = skillRunsHistory[cName]
+          .filter((r: any) => !r?.isInterim && !isPlaceholderPlayer(String(r?.athlete || r?.pKey || "")))
+          .map((r: any) => ({
+            ...r,
+            athlete: atMet[r.pKey]?.name || r.athlete || r.pKey,
+            gender: atMet[r.pKey]?.gender || r.gender || "M",
+            country:
+              atMet[r.pKey]?.countryName || atMet[r.pKey]?.country || r.country,
+            flag: atMet[r.pKey]?.region || atMet[r.pKey]?.flag || r.flag,
+          }));
       } else {
         const allTimePlayers = pRaw["all-time"] || {};
         Object.entries(allTimePlayers).forEach(
           ([pKey, playerRuns]: [string, any]) => {
+            if (isPlaceholderPlayer(String(atMet[pKey]?.name || pKey))) return;
             if (Array.isArray(playerRuns)) {
               const filtered = playerRuns.filter(
                 (r) => (r.challenge || r.label || "").toUpperCase() === cName,
@@ -193,18 +197,9 @@ export const SkillDetails = React.memo(
           },
         );
       }
-      
-      const mInterims = (dataContext.skillRecords_M_AT?.[cName] || []).filter((r: any) => r.isInterim);
-      mInterims.forEach((r: any) => {
-        runList.push({ ...r, athlete: "INTERIM TOP TIME", date: "2026-03-01T00:00:00Z", gender: "M", num: r.time, isInterim: true });
-      });
-      const fInterims = (dataContext.skillRecords_F_AT?.[cName] || []).filter((r: any) => r.isInterim);
-      fInterims.forEach((r: any) => {
-        runList.push({ ...r, athlete: "INTERIM TOP TIME", date: "2026-03-01T00:00:00Z", gender: "F", num: r.time, isInterim: true });
-      });
 
       return runList;
-    }, [pRaw, cName, atMet, skillRunsHistory, dataContext.skillRecords_M_AT, dataContext.skillRecords_F_AT]);
+    }, [pRaw, cName, atMet, skillRunsHistory]);
 
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
@@ -222,14 +217,33 @@ export const SkillDetails = React.memo(
     const eventTypeMode = searchParams.get("eventType");
     const validModes = ["open", "all-time", "2026"];
     
-    let initialModeSafe: "all-time" | "2026" = "all-time";
+    let initialModeSafe: "open" | "all-time" | "2026" = "all-time";
     if (validModes.includes(urlMode as string)) {
-      initialModeSafe = urlMode as "all-time" | "2026";
+      initialModeSafe = urlMode as "open" | "all-time" | "2026";
     } else if (validModes.includes(eventTypeMode as string)) {
-      initialModeSafe = eventTypeMode as "all-time" | "2026";
+      initialModeSafe = eventTypeMode as "open" | "all-time" | "2026";
     }
-    const [uiMode, setUiMode] = useState<"all-time" | "2026">(initialModeSafe);
-    const [contentMode, setContentMode] = useState<"all-time" | "2026">(initialModeSafe);
+    const [uiMode, setUiMode] = useState<"open" | "all-time" | "2026">(initialModeSafe);
+    const [contentMode, setContentMode] = useState<"open" | "all-time" | "2026">(initialModeSafe);
+
+    useEffect(() => {
+      if (urlTab && validTabs.includes(urlTab)) {
+        setUiTab(urlTab);
+        setContentTab(urlTab);
+      }
+    }, [urlTab]);
+
+    useEffect(() => {
+      const nextMode = validModes.includes(urlMode as string)
+        ? (urlMode as "open" | "all-time" | "2026")
+        : validModes.includes(eventTypeMode as string)
+          ? (eventTypeMode as "open" | "all-time" | "2026")
+          : null;
+      if (nextMode) {
+        setUiMode(nextMode);
+        setContentMode(nextMode);
+      }
+    }, [urlMode, eventTypeMode]);
 
     const urlDir = searchParams.get("dir");
     const validDirs = ["desc", "asc"];
@@ -238,9 +252,10 @@ export const SkillDetails = React.memo(
     const toggleSortDirection = () => {
       const nextDir = sortDirection === "desc" ? "asc" : "desc";
       setSearchParams(prev => {
-        prev.delete("sort");
-        prev.set("dir", nextDir);
-        return prev;
+        const next = new URLSearchParams(prev);
+        next.delete("sort");
+        next.set("dir", nextDir);
+        return next;
       }, { replace: true, state: location.state, preventScrollReset: true });
     };
 
@@ -291,7 +306,8 @@ export const SkillDetails = React.memo(
 
     const ratingInt = Math.round(getSkillRating(meta));
     const tierCfg = getSkillTierConfig(ratingInt);
-    const lengthMeters = meta.length ? Math.round(parseFloat(meta.length) || 0) : 0;
+    const lengthNum = meta.length ? parseFloat(String(meta.length)) : NaN;
+    const hasLength = !isNaN(lengthNum) && lengthNum > 0;
     const elevNum = meta.elevation ? parseFloat(meta.elevation) : NaN;
     const hasElev = !isNaN(elevNum) && meta.elevation !== "";
 
@@ -321,7 +337,7 @@ export const SkillDetails = React.memo(
       },
       {
         label: "Length",
-        value: lengthMeters > 0 ? `${lengthMeters}m` : "-",
+        value: hasLength ? `${lengthNum.toFixed(2)}m` : "-",
         icon: <Ruler className="w-3.5 h-3.5" />,
       },
       {
@@ -379,7 +395,7 @@ export const SkillDetails = React.memo(
                 <MapPin size={12} className="shrink-0" />
                 <span className="truncate">{formatLocation(meta)}</span>
               </div>
-              {(ratingInt > 0 || lengthMeters > 0 || hasElev) && (
+              {(ratingInt > 0 || hasLength || hasElev) && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                   {ratingInt > 0 && (
                     <button
@@ -395,7 +411,7 @@ export const SkillDetails = React.memo(
                       <span>LVL {ratingInt}</span>
                     </button>
                   )}
-                  {lengthMeters > 0 && (
+                  {hasLength && (
                     <span
                       className={cn(
                         "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider",
@@ -404,7 +420,7 @@ export const SkillDetails = React.memo(
                           : "bg-black/[0.04] border-black/10 text-zinc-700"
                       )}
                     >
-                      {lengthMeters}M
+                      {lengthNum.toFixed(2)}M
                     </span>
                   )}
                   {hasElev && (
@@ -425,7 +441,12 @@ export const SkillDetails = React.memo(
           }
 
         />
-        <div className="flex w-full gap-2 px-4 py-3 pt-4 border-b border-white/[0.05]">
+        <div
+          className={cn(
+            "flex w-full gap-2 px-4 py-3 pt-4 border-b",
+            theme === "dark" ? "border-white/[0.05]" : "border-black/[0.05]",
+          )}
+        >
           <ASRStandardButton
             href={mapsUrl || undefined}
             target="_blank"
@@ -463,7 +484,12 @@ export const SkillDetails = React.memo(
           </ASRStandardButton>
         </div>
 
-        <div className="w-full px-4 py-3 border-b border-white/[0.05]">
+        <div
+          className={cn(
+            "w-full px-4 py-3 border-b",
+            theme === "dark" ? "border-white/[0.05]" : "border-black/[0.05]",
+          )}
+        >
           <ASRPatronPill challenge={meta} theme={theme} isBanner={false} />
         </div>
 
@@ -488,6 +514,14 @@ export const SkillDetails = React.memo(
                 React.startTransition(() => {
                   setContentTab(t);
                 });
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set("tab", t);
+                    return next;
+                  },
+                  { replace: true, state: location.state, preventScrollReset: true },
+                );
                 scrollToTop();
               }}
               layoutId="challenge-tabs"
@@ -524,6 +558,14 @@ export const SkillDetails = React.memo(
                     React.startTransition(() => {
                       setContentMode(nextMode);
                     });
+                    setSearchParams(
+                      (prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.set("mode", nextMode);
+                        return next;
+                      },
+                      { replace: true, state: location.state, preventScrollReset: true },
+                    );
                     scrollToTop();
                   }}
                   layoutId="challenge-mode-pill-m"
@@ -533,6 +575,10 @@ export const SkillDetails = React.memo(
                 {contentMode === "open" && !meta.isOpenSkill ? (
                   <div className="text-center text-zinc-500 py-10 px-4 text-sm max-w-sm mx-auto">
                     * Challenge not included in the 2026 ASR Open.
+                  </div>
+                ) : contentMode === "2026" && !meta.is2026Skill ? (
+                  <div className="text-center text-zinc-500 py-10 px-4 text-sm max-w-sm mx-auto">
+                    * Challenge not included in the 2026 Season.
                   </div>
                 ) : (
                   <div className="flex flex-col gap-6">
@@ -598,6 +644,14 @@ export const SkillDetails = React.memo(
                     React.startTransition(() => {
                       setContentMode(nextMode);
                     });
+                    setSearchParams(
+                      (prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.set("mode", nextMode);
+                        return next;
+                      },
+                      { replace: true, state: location.state, preventScrollReset: true },
+                    );
                     scrollToTop();
                   }}
                   layoutId="challenge-mode-pill-f"
@@ -607,6 +661,10 @@ export const SkillDetails = React.memo(
                 {contentMode === "open" && !meta.isOpenSkill ? (
                   <div className="text-center text-zinc-500 py-10 px-4 text-sm max-w-sm mx-auto">
                     * Challenge not included in the 2026 ASR Open.
+                  </div>
+                ) : contentMode === "2026" && !meta.is2026Skill ? (
+                  <div className="text-center text-zinc-500 py-10 px-4 text-sm max-w-sm mx-auto">
+                    * Challenge not included in the 2026 Season.
                   </div>
                 ) : (
                   <div className="flex flex-col gap-6">
@@ -655,7 +713,12 @@ export const SkillDetails = React.memo(
                 {meta.notes && (
                   <div className="flex flex-col gap-3 pb-2">
                     <SectionTitle>NOTES</SectionTitle>
-                    <div className="text-zinc-300 text-[15px] leading-relaxed whitespace-pre-wrap px-1">
+                    <div
+                      className={cn(
+                        "text-[15px] leading-relaxed whitespace-pre-wrap px-1",
+                        theme === "dark" ? "text-zinc-300" : "text-zinc-700",
+                      )}
+                    >
                       {meta.notes}
                     </div>
                   </div>

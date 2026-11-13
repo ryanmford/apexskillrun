@@ -17,6 +17,10 @@ export const parseSafeDate = (dStr: string | null | undefined): Date | null => {
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
     return new Date(s.replace(/-/g, "/"));
   }
+  const utcMidnightMatch = s.match(/^(\d{4}-\d{1,2}-\d{1,2})T00:00:00(?:\.000)?Z$/i);
+  if (utcMidnightMatch) {
+    return new Date(utcMidnightMatch[1].replace(/-/g, "/"));
+  }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 };
@@ -896,7 +900,7 @@ export const calculateWofStats = (
         const uniqueCountries = new Set<string>();
         performances.forEach((run: Record<string, unknown>) => {
           const skillKey = String(run.label || run.name || run.challenge || "").toUpperCase();
-          const skillMeta = (cMet && skillKey && cMet[skillKey]) || {};
+          const skillMeta = ((cMet && skillKey && cMet[skillKey]) || {}) as Record<string, unknown>;
           const city = String(run.city || skillMeta.city || "").trim().toUpperCase();
           const country = String(run.country || skillMeta.country || "").trim().toUpperCase();
           if (city && city !== "UNKNOWN" && city !== "N/A" && city !== "NONE") {

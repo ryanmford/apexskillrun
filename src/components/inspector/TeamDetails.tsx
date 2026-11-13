@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { Globe, Instagram, Youtube } from "lucide-react";
 import { cn, formatLocation, getCombinedFlags } from "../../lib/asr-utils";
 import { ASRStatCard } from "../common/ASRStatCard";
@@ -36,7 +36,8 @@ export const TeamDetails = React.memo(
     theme,
     initialMode,
   }: TeamDetailsProps) => {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
 
     const urlTab = searchParams.get("tab");
     const validTabs = ["players", "athletes", "setters", "vault", "bio"];
@@ -54,16 +55,36 @@ export const TeamDetails = React.memo(
     const eventTypeMode = searchParams.get("eventType");
     const validModes = ["open", "all-time", "2026"];
     
-    let initialModeSafe: "all-time" | "2026" = "all-time";
+    let initialModeSafe: "open" | "all-time" | "2026" = "all-time";
     if (validModes.includes(urlMode as string)) {
-      initialModeSafe = urlMode as "all-time" | "2026";
+      initialModeSafe = urlMode as "open" | "all-time" | "2026";
     } else if (validModes.includes(eventTypeMode as string)) {
-      initialModeSafe = eventTypeMode as "all-time" | "2026";
+      initialModeSafe = eventTypeMode as "open" | "all-time" | "2026";
     } else if (initialMode && validModes.includes(initialMode)) {
-      initialModeSafe = initialMode as "all-time" | "2026";
+      initialModeSafe = initialMode as "open" | "all-time" | "2026";
     }
-    const [uiMode, setUiMode] = useState<"all-time" | "2026">(initialModeSafe);
-    const [contentMode, setContentMode] = useState<"all-time" | "2026">(initialModeSafe);
+    const [uiMode, setUiMode] = useState<"open" | "all-time" | "2026">(initialModeSafe);
+    const [contentMode, setContentMode] = useState<"open" | "all-time" | "2026">(initialModeSafe);
+
+    useEffect(() => {
+      if (urlTab && validTabs.includes(urlTab)) {
+        const normalizedTab = urlTab === "athletes" ? "players" : urlTab;
+        setUiTab(normalizedTab);
+        setContentTab(normalizedTab);
+      }
+    }, [urlTab]);
+
+    useEffect(() => {
+      const nextMode = validModes.includes(urlMode as string)
+        ? (urlMode as "open" | "all-time" | "2026")
+        : validModes.includes(eventTypeMode as string)
+          ? (eventTypeMode as "open" | "all-time" | "2026")
+          : null;
+      if (nextMode) {
+        setUiMode(nextMode);
+        setContentMode(nextMode);
+      }
+    }, [urlMode, eventTypeMode]);
 
     const {
       tMeta,
@@ -125,16 +146,37 @@ export const TeamDetails = React.memo(
         >
           <div className="flex w-full max-w-2xl px-4">
             <ASRNeonToggle
-              options={[
-                { label: "PLAYERS", value: "players" },
-                { label: "SETTERS", value: "setters" },
-              ]}
+              options={
+                tMeta?.website ||
+                team?.website ||
+                tMeta?.instagram ||
+                team?.instagram ||
+                tMeta?.youtube ||
+                team?.youtube
+                  ? [
+                      { label: "PLAYERS", value: "players" },
+                      { label: "SETTERS", value: "setters" },
+                      { label: "BIO", value: "bio" },
+                    ]
+                  : [
+                      { label: "PLAYERS", value: "players" },
+                      { label: "SETTERS", value: "setters" },
+                    ]
+              }
               activeOption={uiTab}
               onChange={(t) => {
                 setUiTab(t);
                 React.startTransition(() => {
                   setContentTab(t);
                 });
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set("tab", t);
+                    return next;
+                  },
+                  { replace: true, state: location.state, preventScrollReset: true },
+                );
                 scrollToTop();
               }}
               layoutId="team-tabs"
@@ -229,6 +271,14 @@ export const TeamDetails = React.memo(
                     React.startTransition(() => {
                       setContentMode(nextMode);
                     });
+                    setSearchParams(
+                      (prev) => {
+                        const next = new URLSearchParams(prev);
+                        next.set("mode", nextMode);
+                        return next;
+                      },
+                      { replace: true, state: location.state, preventScrollReset: true },
+                    );
                     scrollToTop();
                   }}
                   layoutId="team-mode-pill"
