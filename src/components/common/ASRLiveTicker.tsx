@@ -74,7 +74,6 @@ export const ASRLiveTicker = React.memo(
           }}
         >
           {duplicatedFeed.map((item: any, idx: number) => {
-            const rank = item.rank || 0;
             const athleteFlag = getCombinedFlags(item.athlete).trim();
             const skillFlag = formatFlagsWithSpace(
               item.challenge?.flag || "",
@@ -82,24 +81,11 @@ export const ASRLiveTicker = React.memo(
             const playerName = String(item.name || "")
               .trim()
               .toUpperCase();
-            const skillNameRaw = String(
+            const skillName = String(
               item.skillName || item.challenge?.name || "UNKNOWN CHALLENGE",
             )
               .trim()
               .toUpperCase();
-            const rawCity = String(
-              item.challenge?.city || item.challenge?.location || "",
-            )
-              .trim()
-              .toUpperCase();
-            const cityName =
-              rawCity === "UNKNOWN" || rawCity === "UNDEFINED" ? "" : rawCity;
-            const skillName = cityName
-              ? `${skillNameRaw}, ${cityName}`
-              : skillNameRaw;
-            const resultVal =
-              item.result ||
-              (typeof item.time === "number" ? item.time.toFixed(2) : "--");
 
             return (
               <div

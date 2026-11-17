@@ -69,6 +69,13 @@ const MemoizedVirtualRow = React.memo(({
 }: MemoizedVirtualRowProps<Record<string, unknown>>) => {
   const absoluteTransform = `translateY(${virtualRow.start}px)`;
 
+  const itemRef = React.useRef(item);
+  itemRef.current = item;
+  const onItemClickRef = React.useRef(onItemClick);
+  onItemClickRef.current = onItemClick;
+  const onItemHoverRef = React.useRef(onItemHover);
+  onItemHoverRef.current = onItemHover;
+
   const stats = React.useMemo(() => {
     if (!item) return [];
     return statColumns.map((c) => ({
@@ -81,12 +88,16 @@ const MemoizedVirtualRow = React.memo(({
   }, [statColumns, item]);
 
   const handleClick = React.useCallback(() => {
-    if (onItemClick) onItemClick(item);
-  }, [onItemClick, item]);
+    if (onItemClickRef.current && itemRef.current) {
+      onItemClickRef.current(itemRef.current);
+    }
+  }, []);
 
   const handleHover = React.useCallback((isHovering: boolean) => {
-    if (onItemHover) onItemHover(item, isHovering);
-  }, [onItemHover, item]);
+    if (onItemHoverRef.current && itemRef.current) {
+      onItemHoverRef.current(itemRef.current, isHovering);
+    }
+  }, []);
 
   if (!item) return null;
 
@@ -170,13 +181,16 @@ export const ASRDataTable = React.memo(
  const setActiveSkillId = useAppStore(s => s.setActiveSkillId);
 
  const handleItemHover = React.useCallback((item: Record<string, unknown>, isHovering: boolean) => {
+   const itemId = (item?.name as string) || (item?.id as string) || (item?.pKey as string) || null;
    if (isHovering) {
      prefetchEntity();
      if (enableHoverSync) {
-       setActiveSkillId((item?.name as string) || (item?.id as string) || (item?.pKey as string) || null);
+       setActiveSkillId(itemId);
      }
    } else if (enableHoverSync) {
-     setActiveSkillId(null);
+     if (!itemId || useAppStore.getState().activeSkillId === itemId) {
+       setActiveSkillId(null);
+     }
    }
  }, [prefetchEntity, setActiveSkillId, enableHoverSync]);
  
@@ -186,26 +200,46 @@ export const ASRDataTable = React.memo(
      : (window.innerWidth >= 1024 ? 80 : 64);
  }, [viewType, isCompact]);
 
+ const itemKeys = React.useMemo(() => {
+   if (!data || data.length === 0) return [];
+   const seen = new Set<string>();
+   return data.map((row: Record<string, unknown> | null | undefined, idx: number) => {
+     if (!row || row.isDivider) return `divider_${idx}`;
+     const baseKey = String(row.id || row.pKey || row.name || `item_${idx}`);
+     if (!seen.has(baseKey)) {
+       seen.add(baseKey);
+       return baseKey;
+     }
+     const dedupKey = `${baseKey}_${idx}`;
+     seen.add(dedupKey);
+     return dedupKey;
+   });
+ }, [data]);
+
+ const getItemKey = React.useCallback(
+   (index: number) => itemKeys[index] ?? `item_${index}`,
+   [itemKeys]
+ );
+
  const windowVirtualizer = useWindowVirtualizer({
  count: !scrollElementRef ? (data?.length || 0) : 0,
  estimateSize,
  overscan: 5,
- getItemKey: (index) => `${data[index]?.id || data[index]?.pKey || data[index]?.name || 'item'}_${index}`,
+ getItemKey,
  });
 
- const [isElementReady, setIsElementReady] = React.useState(false);
- React.useEffect(() => {
-   if (scrollElementRef?.current) {
-     setIsElementReady(true);
-   }
- }, [scrollElementRef?.current]);
+ const [isElementReady, setIsElementReady] = React.useState(() => Boolean(scrollElementRef?.current));
+ React.useLayoutEffect(() => {
+   const ready = Boolean(scrollElementRef?.current);
+   setIsElementReady(prev => (prev === ready ? prev : ready));
+ }, [scrollElementRef]);
 
  const elementVirtualizer = useVirtualizer({
-   count: scrollElementRef && isElementReady ? (data?.length || 0) : 0,
+   count: scrollElementRef && (isElementReady || Boolean(scrollElementRef.current)) ? (data?.length || 0) : 0,
    getScrollElement: () => scrollElementRef?.current || null,
    estimateSize,
    overscan: 5,
-   getItemKey: (index) => `${data[index]?.id || data[index]?.pKey || data[index]?.name || 'item'}_${index}`,
+   getItemKey,
  });
 
  const virtualizer = scrollElementRef ? elementVirtualizer : windowVirtualizer;

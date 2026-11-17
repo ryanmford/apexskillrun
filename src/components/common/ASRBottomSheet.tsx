@@ -2,28 +2,29 @@ import React, { useRef, useEffect, useState, useLayoutEffect } from "react";
 import { motion, useMotionValue, useTransform, animate, PanInfo } from "motion/react";
 
 function useWindowSize() {
-  const [size, setSize] = useState({ 
-    width: window.innerWidth, 
-    height: window.innerHeight 
-  });
+  const [size, setSize] = useState(() => ({
+    width: typeof window !== "undefined" ? window.innerWidth : 0,
+    height: typeof window !== "undefined" ? window.innerHeight : 0,
+  }));
   useLayoutEffect(() => {
     const handleResize = () => {
-      setSize({ 
-        width: window.innerWidth, 
-        height: window.innerHeight 
-      });
+      setSize(prev =>
+        prev.width === window.innerWidth && prev.height === window.innerHeight
+          ? prev
+          : { width: window.innerWidth, height: window.innerHeight }
+      );
     };
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResize, { passive: true });
     return () => {
       window.removeEventListener("resize", handleResize);
-    }
+    };
   }, []);
   return size;
 }
 
 interface BottomSheetProps {
   children: React.ReactNode;
-  snapPoints: number[]; // e.g., [0.2, 0.5, 0.9] of window height // wait, they want absolute control?
+  snapPoints: number[]; // e.g., [0.2, 0.5, 0.9] of window height
   initialSnap?: number;
   activeSnap?: number | null;
   onSnapChange?: (snap: number) => void;
@@ -38,30 +39,44 @@ export const ASRBottomSheet: React.FC<BottomSheetProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { height } = useWindowSize();
-  const H = height || window.innerHeight;
+  const H = height || (typeof window !== "undefined" ? window.innerHeight : 800);
 
   const getPoints = () => snapPoints.map(p => H * (1 - p));
 
   const y = useMotionValue(H * (1 - initialSnap));
 
   const bgOpacity = useTransform(y, [H * 0.1, H * 0.8], [0.4, 0]);
+  const bgDisplay = useTransform(bgOpacity, (v) => (v <= 0.005 ? "none" : "block"));
 
   // Flatten border radius near the highest snap point to seal off "little holes" (only if it hits the top notch)
   const maxSnap = Math.max(...snapPoints);
   const highestY = H * (1 - maxSnap);
   const borderRadius = useTransform(y, [highestY, highestY + 40], [maxSnap >= 0.95 ? 0 : 32, 32], { clamp: true }); // 0 to 32px
 
-  // Sync external activeSnap control
+  const prevSnapRef = useRef<number | null | undefined>(initialSnap);
+  const prevHeightRef = useRef<number>(H);
+
+  // Sync external activeSnap control without bouncing when mobile URL bar resizes
   useEffect(() => {
-    if (activeSnap !== undefined && activeSnap !== null && height > 0) {
-      animate(y, H * (1 - activeSnap), {
+    if (activeSnap === undefined || activeSnap === null || H <= 0) return;
+    const targetY = H * (1 - activeSnap);
+    const snapChanged = prevSnapRef.current !== activeSnap;
+    const heightChanged = prevHeightRef.current !== H;
+    prevSnapRef.current = activeSnap;
+    prevHeightRef.current = H;
+
+    if (snapChanged) {
+      const controls = animate(y, targetY, {
         type: "spring",
         stiffness: 400,
         damping: 40,
         mass: 0.8,
       });
+      return () => controls.stop();
+    } else if (heightChanged) {
+      y.set(targetY);
     }
-  }, [activeSnap, height]);
+  }, [activeSnap, H, y]);
 
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const currentY = y.get();
@@ -85,6 +100,8 @@ export const ASRBottomSheet: React.FC<BottomSheetProps> = ({
             closestIndex = i;
         }
     }
+
+    prevSnapRef.current = snapPoints[closestIndex];
     
     animate(y, closestPoint, {
        type: "spring",
@@ -101,10 +118,10 @@ export const ASRBottomSheet: React.FC<BottomSheetProps> = ({
 
   return (
     <>
-      {/* Optional backdrop: uses backdrop-blur and a subtle dark tint */}
+      {/* Optional backdrop: removed from compositor when fully transparent at resting snap */}
       <motion.div 
          className="fixed inset-0 z-40 pointer-events-none backdrop-blur-[2px]"
-         style={{ opacity: bgOpacity, backgroundColor: 'rgba(0,0,0,0.3)' }} 
+         style={{ opacity: bgOpacity, display: bgDisplay, backgroundColor: 'rgba(0,0,0,0.3)' }} 
       />
 
       <motion.div

@@ -27,7 +27,7 @@ export const THEME = {
   CARD: (t: string) =>
     t === "dark"
       ? "bg-zinc-900/20 border-white/5 backdrop-blur-md shadow-sm text-zinc-100"
-      : "bg-white border-zinc-100 backdrop-blur-md shadow-sm text-black",
+      : "bg-white border-zinc-100 shadow-sm text-black",
   GLASS: (t: string) =>
     t === "dark"
       ? "bg-zinc-900/40 border-white/5 backdrop-blur-2xl shadow-xl"

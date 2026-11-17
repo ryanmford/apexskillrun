@@ -23,7 +23,10 @@ export interface ASRMapProps {
   theme?: string | null;
   className?: string;
   hideControls?: boolean;
+  isSidebarOpen?: boolean;
 }
+
+const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 export const ASRMap = forwardRef(({
   challenges = [],
@@ -36,6 +39,7 @@ export const ASRMap = forwardRef(({
   theme: propTheme,
   className,
   hideControls = false,
+  isSidebarOpen = true,
 }: ASRMapProps, ref: any) => {
   const contextTheme = useContext(ThemeContext);
   const theme = propTheme || contextTheme;
@@ -46,6 +50,11 @@ export const ASRMap = forwardRef(({
   useEffect(() => {
     activeSkillIdRef.current = activeSkillId;
   }, [activeSkillId]);
+
+  const isSidebarOpenRef = useRef(isSidebarOpen);
+  useEffect(() => {
+    isSidebarOpenRef.current = isSidebarOpen;
+  }, [isSidebarOpen]);
 
   const isLocating = useAppStore(s => s.isMapLocating);
   const setIsLocating = useAppStore(s => s.setIsMapLocating);
@@ -62,13 +71,20 @@ export const ASRMap = forwardRef(({
   const hoveredMarkerIdRef = useRef<string | null>(null);
   const prevActiveIdRef = useRef<string | null>(null);
   const prevIsDarkRenderedRef = useRef<boolean | null>(null);
+  const isDarkRef = useRef(isDark);
+  isDarkRef.current = isDark;
+
+  const getDesktopPanelOffset = React.useCallback(() => {
+    if (window.innerWidth < 768 || !isSidebarOpenRef.current) return 0;
+    return window.innerWidth >= 1024 ? 450 : 400;
+  }, []);
 
   const fitMapToSkills = React.useCallback(() => {
     if (!mapReady || !mapRef.current || !challenges) return;
 
     const bounds = L.latLngBounds([]);
     let validCoordsCount = 0;
-    let lastValidCoord = null;
+    let lastValidCoord: [number, number] | null = null;
 
     challenges.forEach((c: any) => {
       if (c.parsedCoords && !c.isDivider) {
@@ -80,30 +96,30 @@ export const ASRMap = forwardRef(({
 
     if (validCoordsCount === 1 && lastValidCoord) {
       const isDesktop = window.innerWidth >= 768;
-      const panelWidth = window.innerWidth >= 1024 ? 450 : 400;
+      const panelWidth = getDesktopPanelOffset();
       const pt = mapRef.current.project(lastValidCoord, 14);
-      if (isDesktop) pt.x -= (panelWidth / 2);
-      else pt.y += (window.innerHeight * 0.15); // Offset for mobile bottom drawer
+      if (isDesktop) pt.x -= panelWidth / 2;
+      else pt.y += window.innerHeight * 0.15; // Offset for mobile bottom drawer
       const targetLatLng = mapRef.current.unproject(pt, 14);
       mapRef.current.flyTo(targetLatLng, 14, { duration: 1.5 });
     } else if (validCoordsCount > 1) {
       if (bounds.isValid()) {
         const isDesktop = window.innerWidth >= 768;
-        const panelWidth = window.innerWidth >= 1024 ? 450 : 400;
+        const panelWidth = getDesktopPanelOffset();
         mapRef.current.fitBounds(bounds, {
-          paddingTopLeft: isDesktop ? [panelWidth + 16, 50] : [16, 50],
+          paddingTopLeft: isDesktop ? [panelWidth + (panelWidth > 0 ? 16 : 50), 50] : [16, 50],
           paddingBottomRight: isDesktop ? [50, 50] : [16, window.innerHeight * 0.3 + 50],
           maxZoom: 12,
           duration: 1.5,
         });
       }
     } else {
-       const isMobile = window.innerWidth < 768;
-       const defaultCenter: L.LatLngTuple = isMobile ? [28, -100] : [15, -90];
-       const defaultZoom = isMobile ? 2 : 3;
-       mapRef.current.flyTo(defaultCenter, defaultZoom, { duration: 1.5 });
+      const isMobile = window.innerWidth < 768;
+      const defaultCenter: L.LatLngTuple = isMobile ? [28, -100] : [15, -90];
+      const defaultZoom = isMobile ? 2 : 3;
+      mapRef.current.flyTo(defaultCenter, defaultZoom, { duration: 1.5 });
     }
-  }, [challenges, mapReady]);
+  }, [challenges, mapReady, getDesktopPanelOffset]);
 
   const resetViewToDefault = React.useCallback(() => {
     if (!mapReady || !mapRef.current) return;
@@ -113,12 +129,59 @@ export const ASRMap = forwardRef(({
     mapRef.current.flyTo(defaultCenter, defaultZoom, { duration: 1.0 });
   }, [mapReady]);
 
+  const handleFindMe = React.useCallback(() => {
+    if (!mapRef.current || !navigator.geolocation) return;
+    setIsLocating(true);
+    trackEvent("map_find_me_click", { status: "requested" });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (!mapRef.current) {
+          setIsLocating(false);
+          return;
+        }
+        const { latitude, longitude } = pos.coords;
+        mapRef.current.flyTo([latitude, longitude], 13, { duration: 1.5 });
+
+        if (userMarkerRef.current) {
+          userMarkerRef.current.setLatLng([latitude, longitude]);
+        } else {
+          const currentIsDark = isDarkRef.current;
+          userMarkerRef.current = L.marker([latitude, longitude], {
+            icon: L.divIcon({
+              html: `
+                <div class="relative flex items-center justify-center" style="width: 24px; height: 24px;">
+                  <div class="absolute inset-[-60%] bg-blue-500/20 rounded-full" style="will-change: transform; transform: translateZ(0); pointer-events: none;"></div>
+                  <div class="relative w-6 h-6 rounded-full flex items-center justify-center bg-blue-500 shadow-[0_4px_12px_rgba(59,130,246,0.6)] border-[2.5px] ${currentIsDark ? 'border-zinc-900' : 'border-white'}">
+                    <div class="relative w-1.5 h-1.5 bg-white rounded-full"></div>
+                  </div>
+                </div>
+              `,
+              className: "bg-transparent",
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            }),
+            interactive: false,
+          }).addTo(mapRef.current);
+        }
+
+        setIsLocating(false);
+        trackEvent("map_find_me_success");
+      },
+      () => setIsLocating(false),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, [setIsLocating]);
+
   // Expose methods to parent
-  useImperativeHandle(ref, () => ({
-    locateUser: handleFindMe,
-    resetView: resetViewToDefault,
-    fitToChallenges: fitMapToSkills,
-  }));
+  useImperativeHandle(
+    ref,
+    () => ({
+      locateUser: handleFindMe,
+      resetView: resetViewToDefault,
+      fitToChallenges: fitMapToSkills,
+    }),
+    [handleFindMe, resetViewToDefault, fitMapToSkills]
+  );
 
   const onSkillClickRef = useRef(onSkillClick);
   const onPinClickRef = useRef(onPinClick);
@@ -129,17 +192,6 @@ export const ASRMap = forwardRef(({
   useEffect(() => { onPinClickRef.current = onPinClick; }, [onPinClick]);
   useEffect(() => { onBoundsChangeRef.current = onBoundsChange; }, [onBoundsChange]);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
-
-  // Keep a ref of isDark for the cluster icon creator
-  const isDarkRef = useRef(isDark);
-  useEffect(() => {
-    isDarkRef.current = isDark;
-    
-    // Attempt to force clusters to redraw to apply the new theme
-    if (clusterGroupRef.current) {
-        clusterGroupRef.current.refreshClusters();
-    }
-  }, [isDark]);
 
   // Map Initialization
   useEffect(() => {
@@ -157,7 +209,7 @@ export const ASRMap = forwardRef(({
       maxZoom: 18,
       maxBounds: [
         [-90, -180],
-        [90, 180]
+        [90, 180],
       ],
       maxBoundsViscosity: 1.0,
       worldCopyJump: false,
@@ -176,8 +228,8 @@ export const ASRMap = forwardRef(({
         ? atob("cGsuZXlKMUlqb2lZWEJsZUcxdmRtVnRaVzUwSWl3aVlTSTZJbU50ZEdJMmMycHBOakE0TTJzeWVIQjRiM041ZDJ4dU5XY2lmUS5hdFAzRW55VmVzSFJsSnlVZldGUU5n")
         : "");
 
-    let lightTileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-    let darkTileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    let lightTileUrl = OSM_TILE_URL;
+    let darkTileUrl = OSM_TILE_URL;
 
     if (mapboxToken) {
       const lightStyle = import.meta.env.VITE_MAPBOX_LIGHT_STYLE || "mapbox/light-v11";
@@ -189,34 +241,53 @@ export const ASRMap = forwardRef(({
     const lightLayer = L.tileLayer(lightTileUrl, {
       maxZoom: 20,
       noWrap: true,
-      className: "transition-opacity duration-[1000ms] ease-in-out",
-    }).addTo(map);
-
-    let darkLayerClass = "transition-opacity duration-[1000ms] ease-in-out";
-    if (!mapboxToken) {
-      darkLayerClass += " map-tiles-dark";
-    }
+    });
 
     const darkLayer = L.tileLayer(darkTileUrl, {
       maxZoom: 20,
       noWrap: true,
-      className: darkLayerClass,
-    }).addTo(map);
+      className: !mapboxToken ? "map-tiles-dark" : "",
+    });
 
-    lightLayer.setOpacity(isDarkRef.current ? 0 : 1);
-    darkLayer.setOpacity(isDarkRef.current ? 1 : 0);
+    // Automatic OSM fallback if Mapbox tiles fail due to quota/network restrictions
+    if (mapboxToken) {
+      let lightFellBack = false;
+      let darkFellBack = false;
+      lightLayer.on("tileerror", () => {
+        if (lightFellBack) return;
+        lightFellBack = true;
+        lightLayer.setUrl(OSM_TILE_URL);
+      });
+      darkLayer.on("tileerror", () => {
+        if (darkFellBack) return;
+        darkFellBack = true;
+        darkLayer.options.className = "map-tiles-dark";
+        const container = darkLayer.getContainer();
+        if (container) container.classList.add("map-tiles-dark");
+        darkLayer.setUrl(OSM_TILE_URL);
+      });
+    }
+
+    // Only attach the active theme's tile layer so we never fetch 2x retina tiles simultaneously
+    if (isDarkRef.current) {
+      darkLayer.addTo(map);
+    } else {
+      lightLayer.addTo(map);
+    }
     tileLayersRef.current = { light: lightLayer, dark: darkLayer };
 
     const getClusterIcon = (cluster: any) => {
       const count = cluster.getChildCount();
       const childMarkers = typeof cluster.getAllChildMarkers === "function" ? cluster.getAllChildMarkers() : [];
-      const ratings: number[] = [];
+      let minR = Infinity;
+      let maxR = -Infinity;
       const tierHexSet = new Set<string>();
 
       for (let i = 0; i < childMarkers.length; i++) {
         const r = Number((childMarkers[i] as any)?._skillRating || 0);
         if (r > 0) {
-          ratings.push(r);
+          if (r < minR) minR = r;
+          if (r > maxR) maxR = r;
           tierHexSet.add(getSkillTierConfig(r).pinHex);
         }
       }
@@ -242,9 +313,7 @@ export const ASRMap = forwardRef(({
         : 'bg-white/95 text-zinc-950 border-black/15 shadow-[0_4px_16px_rgba(0,0,0,0.15)]';
 
       let clusterHoverHtml = "";
-      if (ratings.length > 0) {
-        const minR = Math.min(...ratings);
-        const maxR = Math.max(...ratings);
+      if (minR <= maxR) {
         const rangeLabel = minR === maxR ? `LVL ${minR}` : `LVL ${minR}–${maxR}`;
         clusterHoverHtml = `
           <div class="absolute bottom-[54px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 pointer-fine:group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 pointer-fine:group-hover:translate-y-0 scale-95 pointer-fine:group-hover:scale-100 z-50 whitespace-nowrap">
@@ -263,7 +332,7 @@ export const ASRMap = forwardRef(({
             ${clusterHoverHtml}
             <div class="absolute inset-0 rounded-full z-0 animate-border-shift blur-[4px] opacity-60" style="background: ${gradientStyle}; background-size: 200% 100%;"></div>
             <div class="absolute inset-0 rounded-full z-0 animate-border-shift opacity-90" style="background: ${gradientStyle}; background-size: 200% 100%;"></div>
-            <div class="absolute inset-[1.5px] rounded-full z-10 backdrop-blur-md transition-colors ${innerSurface}"></div>
+            <div class="absolute inset-[1.5px] rounded-full z-10 transition-colors ${innerSurface}"></div>
             <div class="absolute inset-[3px] rounded-full z-10 transition-colors shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"></div>
             <span class="relative z-20 ${textColor} font-black text-xs sm:text-sm tracking-tighter drop-shadow-md">
                ${count}
@@ -276,7 +345,9 @@ export const ASRMap = forwardRef(({
     };
 
     const clusterGroup = L.markerClusterGroup({
-      chunkedLoading: false,
+      chunkedLoading: true,
+      chunkInterval: 100,
+      chunkDelay: 16,
       maxClusterRadius: 50,
       showCoverageOnHover: false,
       spiderfyOnMaxZoom: true,
@@ -290,14 +361,21 @@ export const ASRMap = forwardRef(({
     setMapReady(true);
 
     return () => {
-      // Map cleanup
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
+      clusterGroupRef.current = null;
+      tileLayersRef.current = {};
+      markersRef.current.clear();
+      skillDataRef.current.clear();
+      userMarkerRef.current = null;
+      hoveredMarkerIdRef.current = null;
+      prevActiveIdRef.current = null;
+      prevIsDarkRenderedRef.current = null;
       setMapReady(false);
     };
-  }, []); // Send once on mount
+  }, [setMapReady]); // Send once on mount
 
   // Map Event Handlers
   useEffect(() => {
@@ -350,23 +428,27 @@ export const ASRMap = forwardRef(({
   // ResizeObserver for Container
   useEffect(() => {
     if (!mapReady || !mapContainerRef.current || !mapRef.current) return;
-    
+
+    let rafId: number | null = null;
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-         if (entry.target === mapContainerRef.current) {
-            requestAnimationFrame(() => {
-              if (mapRef.current) {
-                mapRef.current.invalidateSize();
-              }
-            });
-         }
+        if (entry.target === mapContainerRef.current) {
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(() => {
+            rafId = null;
+            if (mapRef.current) {
+              mapRef.current.invalidateSize();
+            }
+          });
+        }
       }
     });
 
     observer.observe(mapContainerRef.current);
-    
+
     return () => {
-       observer.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      observer.disconnect();
     };
   }, [mapReady]);
 
@@ -381,20 +463,21 @@ export const ASRMap = forwardRef(({
     return () => clearTimeout(timer);
   }, [mapReady]);
 
-  // Theme synchronization for Tiles
+  // Theme synchronization for Tiles (only mount active layer so inactive tiles are never fetched)
   useEffect(() => {
-    if (!tileLayersRef.current) return;
+    if (!mapReady || !mapRef.current || !tileLayersRef.current) return;
+    const map = mapRef.current;
     const { light, dark } = tileLayersRef.current;
     if (light && dark) {
       if (isDark) {
-        dark.setOpacity(1);
-        light.setOpacity(0);
+        if (!map.hasLayer(dark)) dark.addTo(map);
+        if (map.hasLayer(light)) map.removeLayer(light);
       } else {
-        light.setOpacity(1);
-        dark.setOpacity(0);
+        if (!map.hasLayer(light)) light.addTo(map);
+        if (map.hasLayer(dark)) map.removeLayer(dark);
       }
     }
-  }, [isDark]);
+  }, [isDark, mapReady]);
 
   // Helpers for hover feature
   const getSkillDisplayName = (fullName: string): string => {
@@ -524,6 +607,7 @@ export const ASRMap = forwardRef(({
 
     // Add or update markers without blowing up the whole cluster.
     const newMarkers: L.Marker[] = [];
+    let hasMarkerMutated = markersToRemove.length > 0;
 
     challenges.forEach((c: SkillData & { parsedCoords?: [number, number] }) => {
       const id = c.name;
@@ -534,79 +618,92 @@ export const ASRMap = forwardRef(({
       const isActive = activeSkillIdRef.current === id;
 
       if (!markersRef.current.has(id)) {
-         const marker = L.marker(c.parsedCoords, {
-            icon: createPinIcon(c, isActive),
-            keyboard: false,
-            zIndexOffset: isActive ? 1000 : 0,
-         });
-         (marker as any)._skillRating = Math.round(getSkillRating(c));
+        const marker = L.marker(c.parsedCoords, {
+          icon: createPinIcon(c, isActive),
+          keyboard: false,
+          zIndexOffset: isActive ? 1000 : 0,
+        });
+        (marker as any)._skillRating = Math.round(getSkillRating(c));
 
-         marker.on("mouseover", () => {
-            hoveredMarkerIdRef.current = id;
-            marker.setZIndexOffset(10000);
-         });
+        marker.on("mouseover", () => {
+          hoveredMarkerIdRef.current = id;
+          marker.setZIndexOffset(10000);
+        });
 
-         marker.on("mouseout", () => {
-            if (hoveredMarkerIdRef.current === id) {
-              hoveredMarkerIdRef.current = null;
-            }
-            const isCurrentActive = activeSkillIdRef.current === id;
-            marker.setZIndexOffset(isCurrentActive ? 1000 : 0);
-         });
+        marker.on("mouseout", () => {
+          if (hoveredMarkerIdRef.current === id) {
+            hoveredMarkerIdRef.current = null;
+          }
+          const isCurrentActive = activeSkillIdRef.current === id;
+          marker.setZIndexOffset(isCurrentActive ? 1000 : 0);
+        });
 
-         marker.on("click", (e) => {
-            (e.originalEvent as any)._markerClicked = true;
-            if (hoveredMarkerIdRef.current === id) {
-              hoveredMarkerIdRef.current = null;
-            }
-            if (document.activeElement instanceof HTMLElement) {
-              document.activeElement.blur();
-            }
-            if (!mapRef.current) return;
+        marker.on("click", (e) => {
+          (e.originalEvent as any)._markerClicked = true;
+          if (hoveredMarkerIdRef.current === id) {
+            hoveredMarkerIdRef.current = null;
+          }
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+          if (!mapRef.current) return;
 
-            // Intelligent Panning
-            const currentZoom = Math.max(mapRef.current.getZoom(), 12);
-            const pt = mapRef.current.project(c.parsedCoords!, currentZoom);
-            const isDesktop = window.innerWidth >= 768;
-            
-            if (!isDesktop) {
-               const targetLatLng = mapRef.current.unproject({ x: pt.x, y: pt.y + (window.innerHeight * 0.22) }, currentZoom);
-               mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 1.0 });
-            } else {
-               const panelWidth = window.innerWidth >= 1024 ? 450 : 400;
-               const targetLatLng = mapRef.current.unproject({ x: pt.x - (panelWidth / 2), y: pt.y }, currentZoom);
-               mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 1.0 });
-            }
+          const latestSkill = skillDataRef.current.get(id) || c;
+          const coords = latestSkill.parsedCoords || c.parsedCoords!;
 
-            if (onPinClickRef.current) onPinClickRef.current(c);
-            else if (onSkillClickRef.current) onSkillClickRef.current(c);
-         });
+          // Intelligent Panning
+          const currentZoom = Math.max(mapRef.current.getZoom(), 12);
+          const pt = mapRef.current.project(coords, currentZoom);
+          const isDesktop = window.innerWidth >= 768;
 
-         markersRef.current.set(id, marker);
-         newMarkers.push(marker);
+          if (!isDesktop) {
+            const targetLatLng = mapRef.current.unproject({ x: pt.x, y: pt.y + window.innerHeight * 0.22 }, currentZoom);
+            mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 1.0 });
+          } else {
+            const panelWidth = getDesktopPanelOffset();
+            const targetLatLng = mapRef.current.unproject({ x: pt.x - panelWidth / 2, y: pt.y }, currentZoom);
+            mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 1.0 });
+          }
+
+          if (onPinClickRef.current) onPinClickRef.current(latestSkill);
+          else if (onSkillClickRef.current) onSkillClickRef.current(latestSkill);
+        });
+
+        markersRef.current.set(id, marker);
+        newMarkers.push(marker);
       } else {
-         const existingMarker = markersRef.current.get(id);
-         if (existingMarker) {
-           (existingMarker as any)._skillRating = Math.round(getSkillRating(c));
-           if (getSkillRating(prevSkill) !== getSkillRating(c)) {
-             existingMarker.setIcon(createPinIcon(c, isActive));
-           }
-         }
+        const existingMarker = markersRef.current.get(id);
+        if (existingMarker) {
+          const nextRating = Math.round(getSkillRating(c));
+          const prevRating = (existingMarker as any)._skillRating;
+          if (prevRating !== nextRating) {
+            (existingMarker as any)._skillRating = nextRating;
+            existingMarker.setIcon(createPinIcon(c, isActive));
+            hasMarkerMutated = true;
+          }
+          const prevCoords = prevSkill?.parsedCoords;
+          if (prevCoords && (prevCoords[0] !== c.parsedCoords[0] || prevCoords[1] !== c.parsedCoords[1])) {
+            existingMarker.setLatLng(c.parsedCoords);
+            hasMarkerMutated = true;
+          }
+        }
       }
     });
 
     if (newMarkers.length > 0) {
       clusterGroupRef.current.addLayers(newMarkers);
+      hasMarkerMutated = true;
     }
-    clusterGroupRef.current.refreshClusters();
-
-  }, [challenges, mapReady]); 
+    if (hasMarkerMutated) {
+      clusterGroupRef.current.refreshClusters();
+    }
+  }, [challenges, mapReady, getDesktopPanelOffset]);
 
   // Active Pin State AND Theme updates (re-render icons)
   useEffect(() => {
     if (!mapReady) return;
 
-    const themeChanged = prevIsDarkRenderedRef.current !== isDark;
+    const themeChanged = prevIsDarkRenderedRef.current !== null && prevIsDarkRenderedRef.current !== isDark;
     const prevActiveId = prevActiveIdRef.current;
 
     if (themeChanged) {
@@ -616,6 +713,7 @@ export const ASRMap = forwardRef(({
         marker.setIcon(createPinIcon(skillObj, isActive));
         marker.setZIndexOffset(isActive ? 1000 : 0);
       }
+      clusterGroupRef.current?.refreshClusters();
     } else if (prevActiveId !== activeSkillId) {
       if (prevActiveId) {
         const prevMarker = markersRef.current.get(prevActiveId);
@@ -685,48 +783,8 @@ export const ASRMap = forwardRef(({
     fitMapToSkills();
   }, [challenges, totalSkills, mapReady, searchQuery, fitMapToSkills]);
 
-  const handleFindMe = () => {
-    if (!mapRef.current || !navigator.geolocation) return;
-    setIsLocating(true);
-    trackEvent("map_find_me_click", { status: "requested" });
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!mapRef.current) return;
-        const { latitude, longitude } = pos.coords;
-        mapRef.current.flyTo([latitude, longitude], 13, { duration: 1.5 });
-        
-        if (userMarkerRef.current) {
-           userMarkerRef.current.setLatLng([latitude, longitude]);
-        } else {
-            const currentIsDark = isDarkRef.current;
-            userMarkerRef.current = L.marker([latitude, longitude], {
-              icon: L.divIcon({
-                html: `
-                  <div class="relative flex items-center justify-center" style="width: 24px; height: 24px;">
-                    <div class="absolute inset-[-60%] bg-blue-500/20 rounded-full" style="will-change: transform; transform: translateZ(0); pointer-events: none;"></div>
-                    <div class="relative w-6 h-6 rounded-full flex items-center justify-center bg-blue-500 shadow-[0_4px_12px_rgba(59,130,246,0.6)] border-[2.5px] ${currentIsDark ? 'border-zinc-900' : 'border-white'}">
-                      <div class="relative w-1.5 h-1.5 bg-white rounded-full"></div>
-                    </div>
-                  </div>
-                `,
-                className: "bg-transparent",
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
-              }),
-              interactive: false
-           }).addTo(mapRef.current);
-        }
-
-        setIsLocating(false);
-        trackEvent("map_find_me_success");
-      },
-      () => setIsLocating(false),
-      { enableHighAccuracy: true }
-    );
-  };
-
-  const handleZoomIn = () => mapRef.current?.zoomIn();
-  const handleZoomOut = () => mapRef.current?.zoomOut();
+  const handleZoomIn = React.useCallback(() => mapRef.current?.zoomIn(), []);
+  const handleZoomOut = React.useCallback(() => mapRef.current?.zoomOut(), []);
 
   return (
     <div
@@ -766,7 +824,7 @@ export const ASRMap = forwardRef(({
             <div className="absolute inset-0 rounded-[2rem] neon-gradient-base animate-border-shift blur-[6px] opacity-0 group-hover:opacity-40 transition-opacity duration-300" />
             <div className="absolute inset-0 rounded-[2rem] neon-gradient-base animate-border-shift opacity-50 group-hover:opacity-90 transition-opacity duration-300" />
             <div className={cn(
-              "absolute inset-[1.5px] rounded-[2rem] z-10 backdrop-blur-md transition-colors",
+              "absolute inset-[1.5px] rounded-[2rem] z-10 transition-colors",
               isDark ? "bg-zinc-900 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-1px_2px_rgba(0,0,0,0.8)]" : "bg-white shadow-[inset_0_2px_3px_rgba(255,255,255,1),inset_0_-1px_2px_rgba(0,0,0,0.1)]"
             )} />
           </div>

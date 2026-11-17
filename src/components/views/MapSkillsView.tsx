@@ -29,11 +29,36 @@ const ASRMap = React.lazy(() => import("../ASRMap").then((m) => ({ default: m.AS
 
 type MapSortMode = "sends_desc" | "sends_asc" | "easiest" | "hardest";
 
+interface MapBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
+function useIsMobileViewport(): boolean {
+  const [isMobile, setIsMobile] = React.useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia("(max-width: 767px)");
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isMobile;
+}
+
 export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" }) => {
   const isLoading = useDataStore(s => s.isLoading);
   const { navigateToEntity } = useAppNavigation();
   const { isAllTimeContext, eventType } = useURLState();
   const skillList = useSkillList();
+  const isMobile = useIsMobileViewport();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -55,11 +80,31 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   const scrollContainerRefDesktop = React.useRef<HTMLDivElement>(null);
   const scrollContainerRefMobile = React.useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const [visibleBounds, setVisibleBounds] = React.useState<any>(null);
+  const [visibleBounds, setVisibleBounds] = React.useState<MapBounds | null>(null);
   const [snap, setSnap] = React.useState<number>(0.2);
   const containerRef = useRef<HTMLDivElement>(null);
   const setActiveSkillId = useAppStore(s => s.setActiveSkillId);
-  
+
+  const handleBoundsChange = React.useCallback((next: MapBounds) => {
+    setVisibleBounds(prev => {
+      if (
+        prev &&
+        Math.abs(prev.north - next.north) < 1e-6 &&
+        Math.abs(prev.south - next.south) < 1e-6 &&
+        Math.abs(prev.east - next.east) < 1e-6 &&
+        Math.abs(prev.west - next.west) < 1e-6
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  const validSkillList = useMemo(
+    () => (skillList ? skillList.filter((c: any) => c && !c.isDivider) : []),
+    [skillList]
+  );
+
   const runKey = isAllTimeContext ? "totalAllTimeRuns" : (eventType === "2026" ? "season26Runs" : eventType === "open" ? "openRuns" : "totalAllTimeRuns");
 
   const setSearch = (val: string) => {
@@ -245,14 +290,13 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   // Step 1: Filter by text query (name, city, state, country)
   const textFilteredData = useMemo(() => {
     const term = normalizeForSearch(textQuery);
-    if (!term) return skillList;
+    if (!term) return validSkillList;
     const searchTerms = term.split(/[\s,]+/).filter(Boolean);
-    return skillList.filter((item: any) => {
-      if (item?.isDivider) return false;
+    return validSkillList.filter((item: any) => {
       const key = item?.searchKey || "";
       return searchTerms.every((t: string) => key.includes(t));
     });
-  }, [textQuery, skillList]);
+  }, [textQuery, validSkillList]);
 
   // Helper to check if a challenge is inside current map viewport bounds
   const isWithinBounds = React.useCallback((item: any, bounds: any) => {
@@ -363,10 +407,10 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
       });
     }
 
-    return sorted.map((item: any, idx: number) => ({
-      ...item,
-      currentRank: idx + 1,
-    }));
+    return sorted.map((item: any, idx: number) => {
+      const nextRank = idx + 1;
+      return item.currentRank === nextRank ? item : { ...item, currentRank: nextRank };
+    });
   }, [searchedData, visibleBounds, isWithinBounds, sortMode, runKey]);
 
   const hasVideosInView = useMemo(
@@ -391,7 +435,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   }, [setActiveSkillId]);
 
   const renderListContent = (currentSnap: number, scrollRef: React.RefObject<HTMLDivElement>, dRef: React.RefObject<any>) => {
-    const skillCount = skillList ? skillList.filter((i: any) => !i.isDivider).length : 0;
+    const skillCount = validSkillList.length;
     const isDark = theme === "dark";
     const hasActiveFilter = activeRatingRanges.length > 0 || !!debouncedSearch;
 
@@ -562,59 +606,64 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
           <ASRMap
             ref={mapRef}
             challenges={searchedData}
-            totalSkills={skillList.filter((c: any) => c && !c.isDivider).length}
-            searchQuery={textQuery}
+            totalSkills={validSkillList.length}
+            searchQuery={String(debouncedSearch || "").trim()}
             theme={theme}
             onSkillClick={handleItemClick}
             onPinClick={handlePinClick}
             onMapClick={handleMapBackgroundClick}
-            onBoundsChange={setVisibleBounds}
+            onBoundsChange={handleBoundsChange}
+            isSidebarOpen={isSidebarOpen}
             className="w-full h-full rounded-none border-none"
           />
         </React.Suspense>
       </div>
 
-      {/* Desktop Panel (Collapsible Glass Sidebar) */}
-      <div 
-        className={cn(
-          "hidden md:flex flex-col absolute top-4 bottom-4 left-4 z-10 shadow-2xl rounded-3xl overflow-hidden border transition-all duration-500 ease-in-out",
-          isSidebarOpen ? "w-[400px] lg:w-[450px]" : "w-[0px] opacity-0 -translate-x-full pointer-events-none",
-          theme === "dark" 
-            ? "bg-zinc-950/70 border-white/10 backdrop-blur-xl" 
-            : "bg-white/70 border-black/10 backdrop-blur-xl"
-        )}
-      >
-        <div className="flex-1 overflow-hidden h-full rounded-3xl">
-          {renderListContent(1, scrollContainerRefDesktop, listRefDesktop)}
-        </div>
-      </div>
-
-      {/* Desktop Sidebar Toggle Button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className={cn(
-          "hidden md:flex absolute top-6 z-20 items-center justify-center w-8 h-12 rounded-r-xl border border-l-0 shadow-lg transition-all duration-500 ease-in-out backdrop-blur-xl hover:bg-opacity-100",
-          isSidebarOpen ? "left-[416px] lg:left-[466px]" : "left-0",
-          theme === "dark"
-            ? "bg-zinc-900/80 border-white/10 text-white hover:bg-zinc-800"
-            : "bg-white/80 border-black/10 text-zinc-900 hover:bg-zinc-100"
-        )}
-      >
-        {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-      </button>
-
-      {/* Mobile Bottom Sheet */}
-      <div className="md:hidden pointer-events-none absolute inset-0 z-50">
-        <ASRBottomSheet
-          snapPoints={[0.2, 0.5, 0.85]}
-          activeSnap={snap as number}
-          onSnapChange={setSnap}
-        >
-          <div className="flex-1 overflow-hidden h-full pt-2">
-            {renderListContent(snap as number, scrollContainerRefMobile, listRefMobile)}
+      {!isMobile ? (
+        <>
+          {/* Desktop Panel (Collapsible Glass Sidebar) */}
+          <div
+            className={cn(
+              "hidden md:flex flex-col absolute top-4 bottom-4 left-4 z-10 shadow-2xl rounded-3xl overflow-hidden border transition-all duration-500 ease-in-out",
+              isSidebarOpen ? "w-[400px] lg:w-[450px]" : "w-[0px] opacity-0 -translate-x-full pointer-events-none",
+              theme === "dark"
+                ? "bg-zinc-950/70 border-white/10 backdrop-blur-xl"
+                : "bg-white/70 border-black/10 backdrop-blur-xl"
+            )}
+          >
+            <div className="flex-1 overflow-hidden h-full rounded-3xl">
+              {renderListContent(1, scrollContainerRefDesktop, listRefDesktop)}
+            </div>
           </div>
-        </ASRBottomSheet>
-      </div>
+
+          {/* Desktop Sidebar Toggle Button */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className={cn(
+              "hidden md:flex absolute top-6 z-20 items-center justify-center w-8 h-12 rounded-r-xl border border-l-0 shadow-lg transition-all duration-500 ease-in-out backdrop-blur-xl hover:bg-opacity-100",
+              isSidebarOpen ? "left-[416px] lg:left-[466px]" : "left-0",
+              theme === "dark"
+                ? "bg-zinc-900/80 border-white/10 text-white hover:bg-zinc-800"
+                : "bg-white/80 border-black/10 text-zinc-900 hover:bg-zinc-100"
+            )}
+          >
+            {isSidebarOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+          </button>
+        </>
+      ) : (
+        /* Mobile Bottom Sheet */
+        <div className="md:hidden pointer-events-none absolute inset-0 z-50">
+          <ASRBottomSheet
+            snapPoints={[0.2, 0.5, 0.85]}
+            activeSnap={snap as number}
+            onSnapChange={setSnap}
+          >
+            <div className="flex-1 overflow-hidden h-full pt-2">
+              {renderListContent(snap as number, scrollContainerRefMobile, listRefMobile)}
+            </div>
+          </ASRBottomSheet>
+        </div>
+      )}
     </div>
   );
 });
