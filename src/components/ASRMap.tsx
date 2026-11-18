@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useRef, useContext, forwardRef, useImperativeHandle } from "react";
-import { Navigation, Plus, Minus } from "lucide-react";
+import { Plus, Minus } from "lucide-react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
@@ -804,6 +804,7 @@ export const ASRMap = forwardRef(({
            <button
               onClick={handleFindMe}
               title="Find my location"
+              aria-label="Find my location"
               className={cn(
                 "pointer-events-auto p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full border transition-all active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
                 isDark
@@ -811,7 +812,41 @@ export const ASRMap = forwardRef(({
                   : "bg-white border-slate-200 text-black shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:bg-slate-50 theme-focus"
               )}
            >
-              <Navigation size={18} strokeWidth={2.5} className={cn(isLocating ? "animate-pulse text-blue-500" : "")} />
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 22 22"
+                fill="none"
+                aria-hidden="true"
+                className="shrink-0"
+              >
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="10"
+                  className={cn(
+                    isDark ? "fill-blue-500/25" : "fill-blue-500/20",
+                    isLocating && "animate-pulse"
+                  )}
+                />
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="6.5"
+                  className="fill-white"
+                  stroke="rgba(37, 99, 235, 0.2)"
+                  strokeWidth="0.5"
+                />
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="4.75"
+                  className={cn(
+                    "fill-blue-500 transition-transform duration-200 origin-center",
+                    isLocating && "scale-90"
+                  )}
+                />
+              </svg>
            </button>
         )}
 
