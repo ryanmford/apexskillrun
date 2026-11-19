@@ -25,6 +25,14 @@ export interface AppState {
   setIsMapLocating: (val: boolean) => void;
   isMapReady: boolean;
   setIsMapReady: (val: boolean) => void;
+  userLocation: [number, number] | null;
+  setUserLocation: (loc: [number, number] | null) => void;
+  mapViewport: { center: [number, number]; zoom: number } | null;
+  setMapViewport: (vp: { center: [number, number]; zoom: number } | null) => void;
+  mapLayerMode: "street" | "satellite";
+  setMapLayerMode: (mode: "street" | "satellite") => void;
+  skillSortMode: "runs" | "nearest";
+  setSkillSortMode: (mode: "runs" | "nearest") => void;
   
   // HomeView Caching & State
   homeVisibleRuns: number;
@@ -96,6 +104,14 @@ export const useAppStore = create<AppState>((set) => ({
   setIsMapLocating: (isMapLocating) => set({ isMapLocating }),
   isMapReady: false,
   setIsMapReady: (isMapReady) => set({ isMapReady }),
+  userLocation: null,
+  setUserLocation: (userLocation) => set({ userLocation }),
+  mapViewport: null,
+  setMapViewport: (mapViewport) => set({ mapViewport }),
+  mapLayerMode: "street",
+  setMapLayerMode: (mapLayerMode) => set({ mapLayerMode }),
+  skillSortMode: "runs",
+  setSkillSortMode: (skillSortMode) => set({ skillSortMode }),
   
   homeVisibleRuns: 10,
   setHomeVisibleRuns: (homeVisibleRuns) => set({ homeVisibleRuns }),

@@ -22,12 +22,12 @@ import {
   createSlug,
 } from "../../lib/asr-utils";
 import { normalizeForSearch } from "../../lib/utils";
-import { ChevronLeft, ChevronRight, X, Compass } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Compass, Navigation } from "lucide-react";
 import { ASRSearchInput } from "../common/ASRSearchInput";
 
 const ASRMap = React.lazy(() => import("../ASRMap").then((m) => ({ default: m.ASRMap })));
 
-type MapSortMode = "sends_desc" | "sends_asc" | "easiest" | "hardest";
+type MapSortMode = "sends_desc" | "sends_asc" | "easiest" | "hardest" | "nearest";
 
 interface MapBounds {
   north: number;
@@ -35,6 +35,21 @@ interface MapBounds {
   east: number;
   west: number;
 }
+
+const computeDistanceKm = (a: [number, number], b: [number, number]): number => {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(b[0] - a[0]);
+  const dLon = toRad(b[1] - a[1]);
+  const lat1 = toRad(a[0]);
+  const lat2 = toRad(b[0]);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLon = Math.sin(dLon / 2);
+  const h =
+    sinDLat * sinDLat +
+    Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+};
 
 function useIsMobileViewport(): boolean {
   const [isMobile, setIsMobile] = React.useState<boolean>(() =>
@@ -66,13 +81,6 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   const search = searchParams.get("q") || searchParams.get(searchKey) || "";
   const ratingParam = searchParams.get("rating") || "all";
   const rawSort = searchParams.get("sort");
-  const sortMode: MapSortMode =
-    rawSort === "easiest" ||
-    rawSort === "hardest" ||
-    rawSort === "sends_asc" ||
-    rawSort === "sends_desc"
-      ? rawSort
-      : "sends_desc";
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const listRefDesktop = useRef<any>(null);
@@ -84,6 +92,41 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   const [snap, setSnap] = React.useState<number>(0.2);
   const containerRef = useRef<HTMLDivElement>(null);
   const setActiveSkillId = useAppStore(s => s.setActiveSkillId);
+  const userLocation = useAppStore(s => s.userLocation);
+  const skillSortMode = useAppStore(s => s.skillSortMode);
+  const setSkillSortMode = useAppStore(s => s.setSkillSortMode);
+
+  const sortMode: MapSortMode =
+    (rawSort === "nearest" || (!rawSort && skillSortMode === "nearest")) && userLocation
+      ? "nearest"
+      : rawSort === "easiest" ||
+        rawSort === "hardest" ||
+        rawSort === "sends_asc" ||
+        rawSort === "sends_desc"
+        ? rawSort
+        : "sends_desc";
+
+  const prevSkillSortModeRef = useRef(skillSortMode);
+  React.useEffect(() => {
+    if (skillSortMode !== prevSkillSortModeRef.current) {
+      prevSkillSortModeRef.current = skillSortMode;
+      if (skillSortMode === "nearest" && rawSort !== "nearest") {
+        startTransition(() => {
+          setSearchParams(prev => {
+            prev.set("sort", "nearest");
+            return prev;
+          }, { replace: true, state: location.state });
+        });
+      } else if (skillSortMode === "runs" && rawSort === "nearest") {
+        startTransition(() => {
+          setSearchParams(prev => {
+            prev.delete("sort");
+            return prev;
+          }, { replace: true, state: location.state });
+        });
+      }
+    }
+  }, [skillSortMode, rawSort, setSearchParams, location.state]);
 
   const handleBoundsChange = React.useCallback((next: MapBounds) => {
     setVisibleBounds(prev => {
@@ -104,6 +147,19 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
     () => (skillList ? skillList.filter((c: any) => c && !c.isDivider) : []),
     [skillList]
   );
+
+  const skillsWithDistance = useMemo(() => {
+    if (!userLocation) return validSkillList;
+    return validSkillList.map((item: any) => {
+      if (item?.isDivider || !item?.parsedCoords) return item;
+      const distKm = computeDistanceKm(userLocation, item.parsedCoords);
+      return {
+        ...item,
+        distanceKm: distKm,
+        subtitle: `${distKm.toFixed(2)} KM AWAY`,
+      };
+    });
+  }, [validSkillList, userLocation]);
 
   const runKey = isAllTimeContext ? "totalAllTimeRuns" : (eventType === "2026" ? "season26Runs" : eventType === "open" ? "openRuns" : "totalAllTimeRuns");
 
@@ -141,6 +197,11 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   }, [setSearchParams, location.state]);
 
   const setSortMode = React.useCallback((nextSort: MapSortMode) => {
+    if (nextSort === "nearest") {
+      setSkillSortMode("nearest");
+    } else {
+      setSkillSortMode("runs");
+    }
     startTransition(() => {
       setSearchParams(prev => {
         if (nextSort === "sends_desc") {
@@ -160,7 +221,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
     if (scrollContainerRefMobile.current) {
       scrollContainerRefMobile.current.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [setSearchParams, location.state]);
+  }, [setSearchParams, location.state, setSkillSortMode]);
 
   const handleLvlHeaderClick = React.useCallback(() => {
     // Cycle LVL sort: easiest (1 -> 100) <-> hardest (100 -> 1)
@@ -246,6 +307,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
     if (refreshTrigger > prevRefreshTrigger.current) {
       prevRefreshTrigger.current = refreshTrigger;
       // Reset view to default when nav dock button is clicked while active
+      setSkillSortMode("runs");
       startTransition(() => {
         setSearchParams(prev => {
           prev.delete(searchKey);
@@ -267,7 +329,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         scrollContainerRefMobile.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
-  }, [refreshTrigger, setActiveSkillId, setSnap, setSearchParams, location.state, searchKey]);
+  }, [refreshTrigger, setActiveSkillId, setSnap, setSearchParams, location.state, searchKey, setSkillSortMode]);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -290,13 +352,13 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   // Step 1: Filter by text query (name, city, state, country)
   const textFilteredData = useMemo(() => {
     const term = normalizeForSearch(textQuery);
-    if (!term) return validSkillList;
+    if (!term) return skillsWithDistance;
     const searchTerms = term.split(/[\s,]+/).filter(Boolean);
-    return validSkillList.filter((item: any) => {
+    return skillsWithDistance.filter((item: any) => {
       const key = item?.searchKey || "";
       return searchTerms.every((t: string) => key.includes(t));
     });
-  }, [textQuery, validSkillList]);
+  }, [textQuery, skillsWithDistance]);
 
   // Helper to check if a challenge is inside current map viewport bounds
   const isWithinBounds = React.useCallback((item: any, bounds: any) => {
@@ -346,6 +408,22 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
     });
   }, [textFilteredData, activeRatingRanges]);
 
+  const nearestOverallSkill = useMemo(() => {
+    if (!userLocation) return null;
+    const source = searchedData.filter((c: any) => c && !c.isDivider && c.parsedCoords && typeof c.distanceKm === "number");
+    const pool = source.length > 0
+      ? source
+      : skillsWithDistance.filter((c: any) => c && !c.isDivider && c.parsedCoords && typeof c.distanceKm === "number");
+    if (pool.length === 0) return null;
+    let best = pool[0];
+    for (let i = 1; i < pool.length; i++) {
+      if (pool[i].distanceKm < best.distanceKm) {
+        best = pool[i];
+      }
+    }
+    return best;
+  }, [userLocation, searchedData, skillsWithDistance]);
+
   const lastAutoOpenedQueryRef = useRef("");
 
   React.useEffect(() => {
@@ -381,7 +459,13 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         });
 
     const sorted = [...inBounds];
-    if (sortMode === "sends_asc") {
+    if (userLocation && sortMode === "nearest") {
+      sorted.sort((a: any, b: any) => {
+        const da = typeof a.distanceKm === "number" ? a.distanceKm : Infinity;
+        const db = typeof b.distanceKm === "number" ? b.distanceKm : Infinity;
+        return da - db;
+      });
+    } else if (sortMode === "sends_asc") {
       sorted.sort((a: any, b: any) => {
         const sendsA = Number(a[runKey] || 0);
         const sendsB = Number(b[runKey] || 0);
@@ -411,7 +495,19 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
       const nextRank = idx + 1;
       return item.currentRank === nextRank ? item : { ...item, currentRank: nextRank };
     });
-  }, [searchedData, visibleBounds, isWithinBounds, sortMode, runKey]);
+  }, [searchedData, visibleBounds, isWithinBounds, sortMode, runKey, userLocation]);
+
+  const handleJumpToNearest = React.useCallback(() => {
+    if (!nearestOverallSkill) return;
+    if (debouncedSearch || activeRatingRanges.length > 0) {
+      clearAllFilters();
+    }
+    setActiveSkillId(nearestOverallSkill.name || null);
+    setSnap(0.5);
+    if (nearestOverallSkill.parsedCoords && mapRef.current?.frameSkillAndUser) {
+      mapRef.current.frameSkillAndUser(nearestOverallSkill.parsedCoords);
+    }
+  }, [nearestOverallSkill, debouncedSearch, activeRatingRanges.length, clearAllFilters, setActiveSkillId]);
 
   const hasVideosInView = useMemo(
     () => visibleData.some((c: any) => !!(c?.videoUrl || c?.demoVideo)),
@@ -436,12 +532,15 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
 
   const renderListContent = (currentSnap: number, scrollRef: React.RefObject<HTMLDivElement>, dRef: React.RefObject<any>) => {
     const skillCount = validSkillList.length;
+    const visibleRealSkillsCount = visibleData.length;
     const isDark = theme === "dark";
     const hasActiveFilter = activeRatingRanges.length > 0 || !!debouncedSearch;
 
     const headerMiddleLabel = (
       <div className="flex items-center gap-2 min-w-0">
-        <span className="truncate">CHALLENGE</span>
+        <span className="truncate">
+          {userLocation && sortMode === "nearest" ? "CHALLENGE • DISTANCE" : "CHALLENGE"}
+        </span>
         {hasActiveFilter && (
           <button
             type="button"
@@ -509,6 +608,50 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
             );
           })}
         </div>
+
+        {/* Viewport Count & Proximity Sort Controls */}
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[10px] font-black uppercase tracking-widest opacity-50 tabular-nums">
+            {visibleRealSkillsCount} IN VIEW
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!userLocation) {
+                  mapRef.current?.locateUser?.();
+                } else {
+                  setSortMode(sortMode === "nearest" ? "sends_desc" : "nearest");
+                }
+              }}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 outline-none",
+                userLocation && sortMode === "nearest"
+                  ? "bg-blue-600 border-blue-400 text-white shadow-[0_0_12px_rgba(59,130,246,0.4)]"
+                  : isDark
+                    ? "bg-zinc-900/80 border-white/10 text-zinc-400 hover:text-white"
+                    : "bg-white/90 border-black/10 text-zinc-600 hover:text-black"
+              )}
+            >
+              <Navigation size={10} strokeWidth={2.5} className={cn(userLocation && sortMode === "nearest" ? "fill-current" : "")} />
+              <span>{userLocation && sortMode === "nearest" ? "SORT: NEAREST" : "NEAREST"}</span>
+            </button>
+            {userLocation && sortMode === "nearest" && (
+              <button
+                type="button"
+                onClick={() => setSortMode("sends_desc")}
+                className={cn(
+                  "px-2.5 py-1 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 outline-none",
+                  isDark
+                    ? "bg-zinc-900/80 border-white/10 text-zinc-400 hover:text-white"
+                    : "bg-white/90 border-black/10 text-zinc-600 hover:text-black"
+                )}
+              >
+                SENDS
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div 
@@ -527,7 +670,70 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         className="flex-1 px-0 pb-4 pt-0 overflow-y-auto overscroll-none"
         style={{ touchAction: currentSnap >= 0.5 ? 'pan-y' : 'none' }}
       >
-        {visibleData.length === 0 && searchedData.length > 0 && !isLoading ? (
+        {!isLoading && visibleRealSkillsCount === 0 && nearestOverallSkill ? (
+          <div className="px-4">
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center p-6 mt-2 text-center rounded-[2rem] border animate-in fade-in duration-300",
+                isDark
+                  ? "bg-zinc-900/50 border-zinc-800"
+                  : "bg-white/80 border-slate-200 shadow-sm"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-12 h-12 rounded-full flex items-center justify-center mb-3",
+                  isDark
+                    ? "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                    : "bg-blue-50 text-blue-600 border border-blue-200"
+                )}
+              >
+                <Compass size={22} strokeWidth={2} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 mb-1">
+                NO CHALLENGES IN IMMEDIATE VIEWPORT
+              </span>
+              <h4
+                className={cn(
+                  "text-sm sm:text-base font-black uppercase tracking-tight mb-1",
+                  isDark ? "text-white" : "text-zinc-900"
+                )}
+              >
+                {nearestOverallSkill.flag ? `${nearestOverallSkill.flag} ` : ""}
+                {nearestOverallSkill.name}
+              </h4>
+              <p
+                className={cn(
+                  "text-xs font-mono font-bold uppercase tracking-widest tabular-nums mb-4",
+                  isDark ? "text-zinc-400" : "text-zinc-500"
+                )}
+              >
+                {nearestOverallSkill.distanceKm.toFixed(2)} KM FROM YOUR LOCATION
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full max-w-xs">
+                <button
+                  type="button"
+                  onClick={handleJumpToNearest}
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_4px_14px_rgba(37,99,235,0.4)] cursor-pointer"
+                >
+                  FRAME NEAREST CHALLENGE
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleItemClick(nearestOverallSkill)}
+                  className={cn(
+                    "w-full sm:w-auto py-2.5 px-4 rounded-xl border text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 cursor-pointer shrink-0",
+                    isDark
+                      ? "bg-zinc-900 border-white/10 text-zinc-200 hover:bg-zinc-800"
+                      : "bg-white border-black/10 text-zinc-800 hover:bg-zinc-50"
+                  )}
+                >
+                  INSPECT
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : visibleData.length === 0 && searchedData.length > 0 && !isLoading ? (
           <div className="px-4">
             <div
               className={cn(
