@@ -301,22 +301,14 @@ export const HomeView = React.memo(() => {
       const cFlagStr = getCombinedFlags(targetSkill);
       const cFlagFmt = cFlagStr ? `${cFlagStr.trim()} ` : "";
 
-      // Calculate Points
-      const cr =
-        selected.gender === "F"
-          ? targetSkill.fRecord || targetSkill.mRecord
-          : targetSkill.mRecord;
-      const runTime = bestRun[1];
-      let pts = Number(targetSkill.points || 0);
-      if (!pts && cr && runTime > 0) {
-        pts = (cr / runTime) * 100;
-      }
+      const lvl = Math.round(Number(targetSkill.points || 0));
 
       rOfDay = {
         athleteName: `${pFlagFmt}${athleteName}`,
         playerObj: pObj || { name: athleteName, pKey: bestRun[0] },
         time: bestRun[1].toFixed(2),
-        pts: Number(pts || 0).toFixed(2),
+        lvl,
+        pts: Number(lvl).toFixed(2),
         videoUrl: bestRun[2],
         skillName: `${cFlagFmt}${targetSkill.name}`,
         challenge: targetSkill,
@@ -567,8 +559,8 @@ export const HomeView = React.memo(() => {
                     ),
                   },
                   {
-                    label: "POINTS",
-                    value: Number(dailyRecord.pts || 0).toFixed(2),
+                    label: "LEVEL",
+                    value: Number(dailyRecord.lvl || 0) > 0 ? `LVL ${Math.round(Number(dailyRecord.lvl))}` : "UNRATED",
                   },
                 ],
               },

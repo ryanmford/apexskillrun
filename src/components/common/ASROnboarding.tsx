@@ -48,14 +48,15 @@ export const ASROnboarding = ({ isOpen, onClose }: ASROnboardingProps) => {
     () => [
       {
         title: "HOW TO START",
-        desc: "Our challenges are set in outdoor, public spaces. You can start anytime.",
+        desc: "Open-source skill parkour. Challenges live outdoors on permanent urban geometry. No tape. No paint. Everybody owns the map. Anyone can start anytime.",
         icon: <Compass />,
       },
       {
         title: "1. Find a challenge",
         desc: (
           <>
-            Use the ASR map to find a challenge near you. Join{" "}
+            Use the ASR map to locate a challenge near you. Read the textures
+            and interfaces. Join{" "}
             <a
               href={CONFIG.SKOOL_LINK}
               target="_blank"
@@ -68,9 +69,9 @@ export const ASROnboarding = ({ isOpen, onClose }: ASROnboardingProps) => {
                 })
               }
             >
-              Apex Skool app
+              Apex Skool
             </a>{" "}
-            to access the ASR community.
+            to access the global player network.
           </>
         ),
         icon: <MapPin />,
@@ -79,7 +80,8 @@ export const ASROnboarding = ({ isOpen, onClose }: ASROnboardingProps) => {
         title: "2. Film your send",
         desc: (
           <>
-            Video proof is everything. Check{" "}
+            Pass or fail. You versus the challenge. Complete it cleanly on raw,
+            uncut video (4K, 24–60fps preferred) or it doesn&apos;t count. Check{" "}
             <a
               href={CONFIG.SKOOL_LINK}
               target="_blank"
@@ -92,10 +94,9 @@ export const ASROnboarding = ({ isOpen, onClose }: ASROnboardingProps) => {
                 })
               }
             >
-              Apex Skool app
+              Apex Skool
             </a>{" "}
-            for official rules to make sure your best
-            sends count.
+            for official rules.
           </>
         ),
         icon: <Video />,
@@ -104,7 +105,7 @@ export const ASROnboarding = ({ isOpen, onClose }: ASROnboardingProps) => {
         title: "3. Get verified",
         desc: (
           <>
-            Post your fastest sends in{" "}
+            Post your raw video proof in{" "}
             <a
               href={CONFIG.SKOOL_LINK}
               target="_blank"
@@ -117,10 +118,10 @@ export const ASROnboarding = ({ isOpen, onClose }: ASROnboardingProps) => {
                 })
               }
             >
-              Apex Skool app
+              Apex Skool
             </a>{" "}
-            for official review. Once verified, your stats will be updated and
-            broadcast live in the ASR app.
+            for community audit. Send 3+ unique challenges to earn your official
+            global rank.
           </>
         ),
         icon: <ShieldCheck />,

@@ -10,15 +10,36 @@ export const ASRFooter = React.memo(() => {
   const [activeModal, setActiveModal] = useState<"about" | "privacy" | "terms" | null>(null);
   const lastUpdated = useDataStore((s) => s.lastUpdated);
   const isLoading = useDataStore((s) => s.isLoading);
+  const kpiStats = useDataStore((s) => s.kpiStats) as {
+    countries?: number;
+    challenges?: number;
+    players?: number;
+    sends?: number;
+  } | null;
+
+  const liveCountries = kpiStats?.countries || 0;
+  const liveChallenges = kpiStats?.challenges || 0;
+  const livePlayers = kpiStats?.players || 0;
 
   const modalContent = {
     about: {
       title: "About",
       content: (
         <div className="space-y-4">
-          <p>Apex Skill Run is a global parkour leaderboard tracking the fastest sends across iconic and local spots worldwide.</p>
-          <p>Built for the community, by the community, our goal is to push the limits of human movement and connect athletes through standardized time trials.</p>
-          <p>Get out there, find a challenge, and set a time.</p>
+          <p>
+            <strong>APEX SKILL RUN</strong> is an open-source, permissionless skill parkour league. Everybody owns the map. Anyone can start anytime.
+          </p>
+          <p>
+            Pass or fail. You versus the challenge. Complexity is governed by surface literacy—friction changes (Textures) and tactile manipulations (Interfaces)—set invisibly on permanent outdoor urban geometry. Never tape. Never paint.
+          </p>
+          <p>
+            Current network:{" "}
+            <strong className="font-mono tabular-nums">{liveCountries.toLocaleString()}</strong> countries,{" "}
+            <strong className="font-mono tabular-nums">{liveChallenges.toLocaleString()}</strong> challenges, and{" "}
+            <strong className="font-mono tabular-nums">{livePlayers.toLocaleString()}</strong> players.
+            <br />
+            The mission: <strong>100</strong> countries, <strong>1,000</strong> challenges, and <strong>10,000</strong> players.
+          </p>
         </div>
       )
     },
@@ -26,8 +47,8 @@ export const ASRFooter = React.memo(() => {
       title: "Privacy Policy",
       content: (
         <div className="space-y-4">
-          <p>We respect your privacy. This application is currently in beta. We collect basic analytics and authentication data necessary to send the leaderboards.</p>
-          <p>We do not sell your data. Videos submitted for send verification are public. If you wish to have your data or account removed, please contact the administrators.</p>
+          <p>Your privacy matters. APEX SKILL RUN collects only basic analytics and verification records required to compute public leaderboards.</p>
+          <p>Your data is never sold. Raw videos submitted for community audit in Apex Skool are public record. Contact the league administrators to request profile removal.</p>
         </div>
       )
     },

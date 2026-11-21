@@ -62,8 +62,8 @@ export function ASRSubmitModal() {
                 theme === "dark" ? "text-zinc-400" : "text-zinc-600"
               }`}
             >
-              Follow our community protocol to get your send verified and added
-              to the leaderboards.
+              Pass or fail. Complete the challenge cleanly on video to get your
+              send verified and added to the leaderboards.
             </p>
 
             <div className="space-y-6">
@@ -87,8 +87,9 @@ export function ASRSubmitModal() {
                       theme === "dark" ? "text-zinc-400" : "text-zinc-600"
                     }`}
                   >
-                    Make sure your start/stop touches are visible and that you
-                    cleared all checkpoints.
+                    Film in raw, uncut video (4K, 24–60fps preferred). Ensure
+                    start/stop touches and all checkpoints are clearly visible.
+                    Obstructed angles or poor quality are rejected.
                   </p>
                 </div>
               </div>
@@ -147,14 +148,15 @@ export function ASRSubmitModal() {
                       theme === "dark" ? "text-zinc-400" : "text-zinc-600"
                     }`}
                   >
-                    Share your info and link to the ASR community audit post on{" "}
+                    Post your details and video link to the community audit
+                    thread on{" "}
                     <a
                       href="https://www.skool.com/apexmovement/share-verify-asr-clips-here"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-semibold text-blue-500 hover:text-blue-400 hover:underline focus-visible:underline outline-none"
                     >
-                      Parkour Skool app
+                      Apex Skool
                     </a>
                     .
                   </p>
@@ -169,7 +171,13 @@ export function ASRSubmitModal() {
                 rel="noopener noreferrer"
                 className="block outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-md"
               >
-                <div className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-md bg-white px-4 py-3 font-mono text-sm font-semibold text-black transition-transform hover:scale-[1.02] active:scale-95">
+                <div
+                  className={`group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-md px-4 py-3 font-mono text-sm font-semibold transition-transform hover:scale-[1.02] active:scale-95 ${
+                    theme === "dark"
+                      ? "bg-white text-black"
+                      : "bg-zinc-900 text-white"
+                  }`}
+                >
                   <div className="absolute inset-0 bg-blue-500/10 opacity-0 transition-opacity group-hover:opacity-100" />
                   VERIFY
                   <ExternalLink size={16} className="ml-1" />

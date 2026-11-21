@@ -153,7 +153,7 @@ export const ASRSearchInput = React.memo(
             placeholder={isFocused ? "" : placeholder}
             aria-label={placeholder || "Search"}
             className={cn(
-              "w-full h-full pl-10 bg-transparent outline-none text-[16px] placeholder:text-[15px] sm:placeholder:text-[16px] font-black uppercase tracking-widest placeholder:opacity-40 placeholder:normal-case placeholder:font-medium placeholder:tracking-normal z-30 relative appearance-none",
+              "w-full h-full pl-10 bg-transparent outline-none text-[16px] placeholder:text-[16px] font-black uppercase tracking-widest placeholder:opacity-40 placeholder:normal-case placeholder:font-medium placeholder:tracking-normal z-30 relative appearance-none",
               theme === "dark"
                 ? "text-white placeholder:text-white"
                 : "text-zinc-900 placeholder:text-zinc-900",

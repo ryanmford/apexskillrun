@@ -129,10 +129,14 @@ export const ASRWhatIfSlider = ({
   const targetTime = computedTargetTime;
   const deferredTargetTime = useDeferredValue(targetTime);
 
-  const simulatedPts =
-    skillRecord && deferredTargetTime > 0
-      ? Math.min(100, (skillRecord / deferredTargetTime) * 100)
-      : 0;
+  const normCName = String(cName || "").toUpperCase();
+  const challengeLevelPts = Number(
+    dataContext?.cMet?.[normCName]?.points ??
+      dataContext?.cMet?.[cName || ""]?.points ??
+      records[0]?.pts ??
+      0,
+  );
+  const simulatedPts = deferredTargetTime > 0 ? challengeLevelPts : 0;
 
   const simulatedPlacement = useMemo(() => {
     return computeSimulatedPlacement(deferredTargetTime, records);
@@ -220,6 +224,7 @@ export const ASRWhatIfSlider = ({
       athletePool,
       skillRecord,
       originalRanks,
+      dataContext.cMet,
     );
   }, [
     selectedAthlete,
@@ -268,15 +273,9 @@ export const ASRWhatIfSlider = ({
                         : `#${selectedAthlete.currentRank}`}
                     </span>
                     <span className="opacity-50">|</span>
-                    <span>PTS: {(selectedAthlete.pts || 0).toFixed(2)}</span>
+                    <span>RATING: {(selectedAthlete.rating || 0).toFixed(2)}</span>
                     <span className="opacity-50">|</span>
-                    <span>
-                      PTS:{" "}
-                      {(
-                        (selectedAthlete.rating || 0) *
-                        (selectedAthlete.sends || 0)
-                      ).toFixed(2)}
-                    </span>
+                    <span>PTS: {(selectedAthlete.pts || 0).toFixed(2)}</span>
                   </span>
                 </div>
               </div>
@@ -345,7 +344,7 @@ export const ASRWhatIfSlider = ({
                       ))
                     ) : (
                       <div className="p-3 text-xs opacity-50 text-center font-medium">
-                        No athletes found.
+                        No players found.
                       </div>
                     )}
                   </motion.div>
@@ -383,14 +382,14 @@ export const ASRWhatIfSlider = ({
 
           <div className="flex flex-col items-center flex-1">
             <span className="text-[9px] font-bold uppercase tracking-widest opacity-50 mb-1">
-              Points
+              Level
             </span>
             <div
               className={cn(
                 "text-2xl sm:text-3xl font-black tabular-nums leading-none tracking-tighter opacity-80",
               )}
             >
-              <RollingNumber value={simulatedPts} decimals={2} />
+              LVL <RollingNumber value={simulatedPts} decimals={0} />
             </div>
           </div>
 

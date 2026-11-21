@@ -267,19 +267,34 @@ export const ASRRankList = ({
               const isUnclaimedItem = item.isUnclaimed;
 
               if (!hideStats) {
+                const isWholeNumber = [
+                  "IMPACT",
+                  "SETS",
+                  "RANK",
+                  "SENDS",
+                  "1ST SENDS",
+                  "CHALLENGES",
+                  "FILMS",
+                  "LVL",
+                  "LEVEL",
+                ].includes(String(valueLabel || "").toUpperCase());
+
                 if (isUnclaimedItem) {
-                  stats.push({ value: "---", label: "PTS" });
+                  stats.push({ value: "---", label: valueLabel });
                 } else if (
                   !isArray &&
                   points !== undefined &&
                   time !== undefined
                 ) {
+                  const numPts = cleanNumeric(points) || 0;
                   stats.push({
-                    value: (cleanNumeric(points) || 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }),
-                    label: "PTS",
+                    value: isWholeNumber
+                      ? Math.round(numPts).toLocaleString()
+                      : numPts.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }),
+                    label: valueLabel,
                   });
                 } else {
                   const value = isArray
@@ -290,12 +305,6 @@ export const ASRRankList = ({
                       item.impact ??
                       item.sends ??
                       item.num);
-                  const isWholeNumber = [
-                    "IMPACT",
-                    "SETS",
-                    "RANK",
-                    "SENDS",
-                  ].includes(String(valueLabel || "").toUpperCase());
                   stats.push({
                     value:
                       typeof value === "number"

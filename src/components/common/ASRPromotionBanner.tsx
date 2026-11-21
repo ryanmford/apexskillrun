@@ -52,10 +52,10 @@ export const ASRPromotionBanner = React.memo(
  </>
  ),
  desc: hasSponsor
- ? `This challenge is officially supported by ${sponsorName}. Check out their work and show some love to our partners who make this possible!`
- : "Challenge sponsorships go directly to maintaining the challenge IRL, digital leaaderboards, and continued development. Adopt a challenge to support ASR and showcase your brand.",
+ ? `This challenge is officially supported by ${sponsorName}. Support the partners who back grassroots skill parkour.`
+ : "Challenge sponsorships fund local setters, digital leaderboards, and open-source development. Adopt this challenge to back the map and showcase your brand.",
  btnText: hasSponsor ? "LEARN MORE" : "INQUIRE",
- btnSubText: null, // "SUPPORT THE SPEED COMMUNITY" could go here if we wanted text under the button, but we cut it for sponsors as requested
+ btnSubText: null,
  btnProps: { color: "gold" as any, effect: "metallic" as any },
  link: sponsorLink,
  };
@@ -75,12 +75,12 @@ export const ASRPromotionBanner = React.memo(
  <span className="text-emerald-500">CERTIFICATION</span>
  </>
  ),
- desc: "Learn to design, build, and validate new ASR challenges for our global community. Get certified to create official ASR challenges worldwide.",
+ desc: "Design, ghost-set, and validate official ASR challenges on permanent urban geometry. Earn Setter Impact and Level 1–3 certification.",
  btnText: "BECOME A SETTER",
- btnSubText: "DESIGN THE NEXT GENERATION OF CHALLENGES",
+ btnSubText: "BUILD THE GLOBAL CHALLENGE MAP",
  btnProps: {
  variant: "solid" as any,
-          effect: "none" as any,
+           effect: "none" as any,
  className:
  "bg-emerald-600 hover:bg-emerald-500 text-white border-none",
  },
@@ -101,12 +101,12 @@ export const ASRPromotionBanner = React.memo(
  2026 ASR <span className="text-pink-500">CROWDFUNDER</span>
  </>
  ),
- desc: "Help us continue to build our official App, compensate setters, fund player prize pools, and grow the sport. Every contribution helps!",
+ desc: "Fund open-source app development, compensate setters, and back player bounties across the grassroots network.",
  btnText: "CONTRIBUTE NOW",
- btnSubText: "FUEL THE SPEED PARKOUR MOVEMENT",
+ btnSubText: "GROW THE GRASSROOTS SKILL PARKOUR LEAGUE",
  btnProps: {
  variant: "solid" as any,
-          effect: "none" as any,
+           effect: "none" as any,
  className: "bg-pink-600 hover:bg-pink-500 text-white border-none",
  },
  link: CONFIG.SKOOL_LINK,
@@ -124,12 +124,12 @@ export const ASRPromotionBanner = React.memo(
  subtitle: "JOIN THE ASR COMMUNITY",
  title: (
  <>
- PARKOUR SKOOL APP
+ APEX SKOOL COMMUNITY
  </>
  ),
- desc: "Join the official ASR community to share tips and clips, get your sends verified, learn new training methods, and connect with other speed parkour athletes.",
+ desc: "Submit raw video proof for community audit, get your sends verified, study surface literacy, and connect with players worldwide.",
  btnText: "JOIN NOW",
- btnSubText: "CONNECT WITH THE WORLDWIDE COMMUNITY",
+ btnSubText: "CONNECT WITH THE WORLDWIDE PLAYER NETWORK",
  btnProps: { variant: "solid" as any, effect: "none" as any },
  link: CONFIG.SKOOL_LINK,
  };

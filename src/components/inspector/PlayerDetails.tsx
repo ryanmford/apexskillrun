@@ -418,7 +418,7 @@ export const PlayerDetails = React.memo(
                       onClick={() => setSortState(sortCategory === "points" ? "date" : "points", "desc")}
                       className="px-3 py-1.5 hover:opacity-70 active:scale-95 transition-all uppercase"
                     >
-                      {sortCategory}
+                      {sortCategory === "points" ? "LEVEL" : "DATE"}
                     </button>
                     <div className={cn("w-px h-3", theme === "dark" ? "bg-white/20" : "bg-black/20")} />
                     <button
@@ -433,7 +433,7 @@ export const PlayerDetails = React.memo(
                 {sortedRankListRuns.length > 0 ? (
                   <ASRRankList
                     athletes={sortedRankListRuns}
-                    valueLabel="PTS"
+                    valueLabel="LVL"
                     onEntityClick={onEntityClick}
                     dataContext={dataContext}
                     hideSubtitle={false}
@@ -538,7 +538,7 @@ export const PlayerDetails = React.memo(
                       onClick={() => setSortState(sortCategory === "points" ? "date" : "points", "desc")}
                       className="px-3 py-1.5 hover:opacity-70 active:scale-95 transition-all uppercase"
                     >
-                      {sortCategory}
+                      {sortCategory === "points" ? "LEVEL" : "DATE"}
                     </button>
                     <div className={cn("w-px h-3", theme === "dark" ? "bg-white/20" : "bg-black/20")} />
                     <button
@@ -553,7 +553,7 @@ export const PlayerDetails = React.memo(
                 {sortedRankListSets.length > 0 ? (
                   <ASRRankList
                     athletes={sortedRankListSets}
-                    valueLabel="PTS"
+                    valueLabel="LVL"
                     onEntityClick={onEntityClick}
                     dataContext={dataContext}
                     hideSubtitle={false}

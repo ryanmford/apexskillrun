@@ -41,13 +41,14 @@ export const RegionDetails = React.memo(
 
     const urlTab = searchParams.get("tab");
     const validTabs = ["players", "challenges"];
-    const [activeTab, setActiveTab] = useState(
-      validTabs.includes(urlTab as string) ? (urlTab as string) : "players",
-    );
+    const initialTabSafe = validTabs.includes(urlTab as string) ? (urlTab as string) : "players";
+    const [uiTab, setUiTab] = useState(initialTabSafe);
+    const [contentTab, setContentTab] = useState(initialTabSafe);
 
     useEffect(() => {
       if (urlTab && validTabs.includes(urlTab)) {
-        setActiveTab(urlTab);
+        setUiTab(urlTab);
+        setContentTab(urlTab);
       }
     }, [urlTab]);
 
@@ -232,7 +233,7 @@ export const RegionDetails = React.memo(
       <div
         className={cn(
           "flex flex-col relative pb-32 transition-colors",
-          theme === "dark" ? "bg-[#0a0a0c]" : "bg-white",
+          theme === "dark" ? "bg-[#030303]" : "bg-white",
         )}
       >
         <ProfileHeader
@@ -260,9 +261,12 @@ export const RegionDetails = React.memo(
                 { label: "PLAYERS", value: "players" },
                 { label: "CHALLENGES", value: "challenges" },
               ]}
-              activeOption={activeTab}
+              activeOption={uiTab}
               onChange={(t) => {
-                setActiveTab(t);
+                setUiTab(t);
+                React.startTransition(() => {
+                  setContentTab(t);
+                });
                 setSearchParams(
                   (prev) => {
                     const next = new URLSearchParams(prev);
@@ -286,7 +290,7 @@ export const RegionDetails = React.memo(
             theme === "dark" ? "bg-[#050505]" : "bg-[#FAFAFA]",
           )}
         >
-          {activeTab === "players" && (
+          {contentTab === "players" && (
             <InspectorTabContainer>
               <div className="grid grid-cols-2 gap-4">
                 <ASRStatCard label="PLAYERS" value={regionalPlayers.length} />
@@ -324,7 +328,7 @@ export const RegionDetails = React.memo(
             </InspectorTabContainer>
           )}
 
-          {activeTab === "challenges" && (
+          {contentTab === "challenges" && (
             <InspectorTabContainer>
               <div className="grid grid-cols-2 gap-4">
                 <ASRStatCard label="CHALLENGES" value={regionalSkills.length} />

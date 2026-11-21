@@ -200,9 +200,34 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       (a) => !isPlaceholderPlayer(dnMap[a[0] as string] || a[0]),
     );
     const normName = String(name).toUpperCase();
+    const runsForSkill = (skillRunsHistory?.[normName] || []) as Array<{
+      videoUrl?: string;
+      date?: string | null;
+      isInterim?: boolean;
+      pKey?: string;
+      name?: string;
+    }>;
+    const datedRunsWithVideo = runsForSkill
+      .filter(
+        (r) =>
+          r &&
+          r.videoUrl &&
+          r.date &&
+          !r.isInterim &&
+          !isPlaceholderPlayer(String(r.name || r.pKey || "")),
+      )
+      .sort((a, b) => {
+        const dA = parseSafeDate(a.date)?.getTime() ?? Infinity;
+        const dB = parseSafeDate(b.date)?.getTime() ?? Infinity;
+        return dA - dB;
+      });
+    const firstRunVideoUrl = datedRunsWithVideo[0]?.videoUrl || null;
+
     return {
+      ...meta,
       name,
-      videoUrl: meta.demoVideo || meta.videoUrl,
+      firstRunVideoUrl,
+      videoUrl: firstRunVideoUrl || meta.demoVideo || meta.videoUrl,
       city: meta.city || "UNKNOWN",
       country: meta.country || "UNKNOWN",
       flag: meta.flag || "🏳️",
@@ -223,7 +248,6 @@ export function computeAllState(payload: { rM: string; rF: string; rLive: string
       parsedCoords: coordsMatch
         ? [parseFloat(coordsMatch[1]), parseFloat(coordsMatch[2])]
         : null,
-      ...meta,
     };
   });
 
@@ -902,7 +926,8 @@ export function computeSimulatedGlobalImpact(
   fullLeaderboards: Record<string, Record<string, number>>,
   athletePool: PlayerProfile[],
   skillRecord: number,
-  originalRanks: Record<string, number>
+  originalRanks: Record<string, number>,
+  cMet?: Record<string, SkillData>,
 ) {
   const existingTimesList = fullLeaderboards[skillName] || {};
   let minOtherTime = Infinity;
@@ -914,62 +939,28 @@ export function computeSimulatedGlobalImpact(
   }
   
   const simulatedCR = Math.min(minOtherTime !== Infinity ? minOtherTime : skillRecord, targetTime > 0 ? targetTime : skillRecord);
-  const oldCR = skillRecord || 1;
-
-  // Precompute challenge records for the entire state array
-  const skillRecords: Record<string, number> = {};
-  for (const cName in fullLeaderboards) {
-      if (cName === skillName) {
-          skillRecords[cName] = simulatedCR;
-      } else {
-          const times = Object.values(fullLeaderboards[cName]);
-          const validTimes = times.filter(t => typeof t === "number" && t > 0);
-          skillRecords[cName] = validTimes.length > 0 ? Math.min(...validTimes) : 0;
-      }
-  }
 
   const simulatedRatings: Record<string, number> = {};
-  let totalPointsDestroyed = 0;
+  const totalPointsDestroyed = 0;
   
   for (const pt of athletePool) {
-      let totalPts = 0;
-      let totalRuns = 0;
+      const earnedChallengePts: number[] = [];
       
       for (const cName in fullLeaderboards) {
           let time = fullLeaderboards[cName][pt.pKey];
-          
-          if (cName === skillName) {
-              if (pt.pKey === selectedAthlete.pKey) {
-                  time = targetTime;
-              }
-              const cr = skillRecords[cName];
-              if (typeof time === "number" && time > 0 && cr > 0) {
-                  totalPts += Math.min(100, (cr / time) * 100);
-                  totalRuns++;
-              }
-          } else {
-              const cr = skillRecords[cName];
-              if (typeof time === "number" && time > 0 && cr > 0) {
-                  totalPts += Math.min(100, (cr / time) * 100);
-                  totalRuns++;
-              }
+          if (cName === skillName && pt.pKey === selectedAthlete.pKey) {
+              time = targetTime;
+          }
+          if (typeof time === "number" && time > 0) {
+              const normC = String(cName).toUpperCase();
+              const lvlPts = Number(cMet?.[normC]?.points ?? cMet?.[cName]?.points ?? 0);
+              earnedChallengePts.push(lvlPts);
           }
       }
       
-      simulatedRatings[pt.pKey] = totalRuns > 0 ? totalPts / totalRuns : 0;
-
-      // Track points destroyed for others
-      if (pt.pKey !== selectedAthlete.pKey) {
-          const ptOriginalTime = existingTimesList[pt.pKey];
-          if (typeof ptOriginalTime === "number" && ptOriginalTime > 0) {
-              const oldSkillPts = Math.min(100, (oldCR / ptOriginalTime) * 100);
-              const newSkillPts = Math.min(100, (simulatedCR / ptOriginalTime) * 100);
-              const pointsDelta = newSkillPts - oldSkillPts;
-              if (pointsDelta < 0) {
-                  totalPointsDestroyed += Math.abs(pointsDelta);
-              }
-          }
-      }
+      const top10 = earnedChallengePts.sort((a, b) => b - a).slice(0, 10);
+      const top10Sum = top10.reduce((sum, v) => sum + v, 0);
+      simulatedRatings[pt.pKey] = top10.length > 0 ? top10Sum / top10.length : 0;
   }
 
   const mySimRating = Math.round(simulatedRatings[selectedAthlete.pKey] * 1000000) / 1000000;

@@ -21,20 +21,28 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
   const initialMode: "players" | "gyms" | "teams" =
     pathMode || (queryMode === "teams" ? "teams" : queryMode === "gyms" ? "gyms" : "players");
 
-  const [mode, setMode] = useState<"players" | "gyms" | "teams">(initialMode);
+  const [uiMode, setUiMode] = useState<"players" | "gyms" | "teams">(initialMode);
+  const [contentMode, setContentMode] = useState<"players" | "gyms" | "teams">(initialMode);
+  const [uiGen, setUiGen] = useState<"M" | "F">(gen);
+
+  useEffect(() => {
+    setUiGen(gen);
+  }, [gen]);
 
   useEffect(() => {
     if (queryMode === "teams" || queryMode === "gyms" || queryMode === "players") {
-      setMode(queryMode);
+      setUiMode(queryMode);
+      setContentMode(queryMode);
     } else if (pathMode) {
-      setMode(pathMode);
+      setUiMode(pathMode);
+      setContentMode(pathMode);
     }
   }, [queryMode, pathMode]);
 
   useEffect(() => {
-    if (mode === "gyms") setTeamCategory("gyms");
-    if (mode === "teams") setTeamCategory("teams");
-  }, [mode, setTeamCategory]);
+    if (contentMode === "gyms") setTeamCategory("gyms");
+    if (contentMode === "teams") setTeamCategory("teams");
+  }, [contentMode, setTeamCategory]);
 
   const playerList = usePlayerList();
   const teamList = useTeamList();
@@ -44,9 +52,9 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
   }, [navigateToEntity]);
 
   const handleTeamClick = React.useCallback((t: TeamProfile) => {
-    const entityType = t.category === "gyms" || mode === "gyms" ? "gym" : "team";
+    const entityType = t.category === "gyms" || contentMode === "gyms" ? "gym" : "team";
     navigateToEntity(entityType, t);
-  }, [navigateToEntity, mode]);
+  }, [navigateToEntity, contentMode]);
 
   const playerColumns = React.useMemo(() => [
     {
@@ -66,28 +74,36 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
   ], []);
 
   const handleGenChange = React.useCallback((g: string) => {
-    setGen(g as "M" | "F");
+    const nextGen = g as "M" | "F";
+    setUiGen(nextGen);
+    React.startTransition(() => {
+      setGen(nextGen);
+    });
     if (window.scrollY > 150) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [setGen]);
 
   const handleModeChange = React.useCallback((newMode: string) => {
-    setMode(newMode as "players" | "gyms" | "teams");
-    setSearchParams(
-      (prev) => {
-        prev.set("mode", newMode);
-        return prev;
-      },
-      { replace: true }
-    );
+    const nextMode = newMode as "players" | "gyms" | "teams";
+    setUiMode(nextMode);
+    React.startTransition(() => {
+      setContentMode(nextMode);
+      setSearchParams(
+        (prev) => {
+          prev.set("mode", nextMode);
+          return prev;
+        },
+        { replace: true, preventScrollReset: true }
+      );
+    });
     if (window.scrollY > 150) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [setSearchParams]);
 
   const listData = React.useMemo(() => {
-    if (mode === "teams" || mode === "gyms") return teamList;
+    if (contentMode === "teams" || contentMode === "gyms") return teamList;
     if (eventType === "open") {
       return playerList.map((p) => {
         // We know 'currentRank' might be typed slightly generically in PlayerProfile,
@@ -104,14 +120,14 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
       });
     }
     return playerList;
-  }, [mode, eventType, playerList, teamList]);
+  }, [contentMode, eventType, playerList, teamList]);
 
-  const listColumns = mode === "players" ? playerColumns : teamColumns;
-  const itemClick = mode === "players" ? handlePlayerClick : handleTeamClick;
-  const searchPlaceholder = mode === "players" ? "search players..." : (mode === "gyms" ? "search gyms..." : "search teams...");
-  const middleLabel = mode === "players" ? "PLAYER" : (mode === "gyms" ? "GYM" : "TEAM");
+  const listColumns = contentMode === "players" ? playerColumns : teamColumns;
+  const itemClick = contentMode === "players" ? handlePlayerClick : handleTeamClick;
+  const searchPlaceholder = contentMode === "players" ? "search players..." : (contentMode === "gyms" ? "search gyms..." : "search teams...");
+  const middleLabel = contentMode === "players" ? "PLAYER" : (contentMode === "gyms" ? "GYM" : "TEAM");
 
-  const searchSubtext = (mode === "players") ? (
+  const searchSubtext = (contentMode === "players") ? (
     <div className="flex flex-col gap-1 mt-2 mb-1 w-full">
       {eventType === "open" ? (
         <>
@@ -142,7 +158,7 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
       onItemClick={itemClick}
       middleLabel={middleLabel}
       columns={listColumns}
-      categoryName={mode === "players" ? "Players" : "Teams"}
+      categoryName={contentMode === "players" ? "Players" : "Teams"}
       topControls={
         <ASRNeonToggle
           options={[
@@ -150,7 +166,7 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
             { label: "GYMS", value: "gyms" },
             { label: "TEAMS", value: "teams" },
           ]}
-          activeOption={mode}
+          activeOption={uiMode}
           onChange={handleModeChange}
           layoutId="primary-mode-pill"
           theme={theme}
@@ -158,13 +174,13 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
         />
       }
       headerControls={
-        mode === "players" ? (
+        uiMode === "players" ? (
           <ASRNeonToggle
             options={[
               { label: "M", value: "M" },
               { label: "W", value: "F" },
             ]}
-            activeOption={gen}
+            activeOption={uiGen}
             onChange={handleGenChange}
             layoutId="gen-pill"
             theme={theme}

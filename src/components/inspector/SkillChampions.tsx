@@ -223,7 +223,7 @@ export const SkillChampions = ({ sends, theme }: ChampionsProps) => {
   : theme === "dark" ? "text-white/50" : "text-zinc-500"
   )}
   >
-  {i === 0 ? "100.00" : ((champs[0].time / champ.time) * 100).toFixed(2)}
+  {i === 0 ? "CURRENT CR" : "FORMER CR"}
   </div>
   </div>
   <div className="flex items-center justify-center shrink-0 w-8">
