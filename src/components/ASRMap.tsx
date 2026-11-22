@@ -26,8 +26,13 @@ export interface ASRMapProps {
   isSidebarOpen?: boolean;
 }
 
-const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const CARTO_LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const CARTO_DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 const ESRI_SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const MERCATOR_BOUNDS: L.LatLngBoundsExpression = [
+  [-85.05112878, -179.9999],
+  [85.05112878, 179.9999],
+];
 
 export const ASRMap = forwardRef(({
   challenges = [],
@@ -438,8 +443,8 @@ export const ASRMap = forwardRef(({
         ? atob("cGsuZXlKMUlqb2lZWEJsZUcxdmRtVnRaVzUwSWl3aVlTSTZJbU50ZEdJMmMycHBOakE0TTJzeWVIQjRiM041ZDJ4dU5XY2lmUS5hdFAzRW55VmVzSFJsSnlVZldGUU5n")
         : "");
 
-    let lightTileUrl = OSM_TILE_URL;
-    let darkTileUrl = OSM_TILE_URL;
+    let lightTileUrl = CARTO_LIGHT_TILE_URL;
+    let darkTileUrl = CARTO_DARK_TILE_URL;
     let satelliteUrl = ESRI_SATELLITE_URL;
 
     if (mapboxToken) {
@@ -450,45 +455,50 @@ export const ASRMap = forwardRef(({
       satelliteUrl = `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`;
     }
 
+    const isValidMercatorTileCoord = (coords?: { x: number; y: number; z: number }) => {
+      if (!coords || typeof coords.z !== "number") return true;
+      const limit = 1 << coords.z;
+      return coords.x >= 0 && coords.x < limit && coords.y >= 0 && coords.y < limit;
+    };
+
     const lightLayer = L.tileLayer(lightTileUrl, {
       maxZoom: 21,
       maxNativeZoom: 19,
       noWrap: true,
+      bounds: MERCATOR_BOUNDS,
     });
 
     const darkLayer = L.tileLayer(darkTileUrl, {
       maxZoom: 21,
       maxNativeZoom: 19,
       noWrap: true,
-      className: !mapboxToken ? "map-tiles-dark" : "",
+      bounds: MERCATOR_BOUNDS,
     });
 
     const satelliteLayer = L.tileLayer(satelliteUrl, {
       maxZoom: 21,
       maxNativeZoom: 19,
       noWrap: true,
+      bounds: MERCATOR_BOUNDS,
     });
 
-    // Automatic OSM / Esri fallback if Mapbox tiles fail due to quota/network restrictions
+    // Automatic CARTO / Esri fallback if Mapbox tiles fail due to quota/network restrictions
     if (mapboxToken) {
       let lightFellBack = false;
       let darkFellBack = false;
       let satFellBack = false;
-      lightLayer.on("tileerror", () => {
-        if (lightFellBack) return;
+      lightLayer.on("tileerror", (e: any) => {
+        if (lightFellBack || !isValidMercatorTileCoord(e?.coords)) return;
         lightFellBack = true;
-        lightLayer.setUrl(OSM_TILE_URL);
+        lightLayer.setUrl(CARTO_LIGHT_TILE_URL);
       });
-      darkLayer.on("tileerror", () => {
-        if (darkFellBack) return;
+      darkLayer.on("tileerror", (e: any) => {
+        if (darkFellBack || !isValidMercatorTileCoord(e?.coords)) return;
         darkFellBack = true;
-        darkLayer.options.className = "map-tiles-dark";
-        const container = darkLayer.getContainer();
-        if (container) container.classList.add("map-tiles-dark");
-        darkLayer.setUrl(OSM_TILE_URL);
+        darkLayer.setUrl(CARTO_DARK_TILE_URL);
       });
-      satelliteLayer.on("tileerror", () => {
-        if (satFellBack) return;
+      satelliteLayer.on("tileerror", (e: any) => {
+        if (satFellBack || !isValidMercatorTileCoord(e?.coords)) return;
         satFellBack = true;
         satelliteLayer.setUrl(ESRI_SATELLITE_URL);
       });
@@ -1166,7 +1176,11 @@ export const ASRMap = forwardRef(({
       id="asr-map-container"
       className={cn(
         "relative w-full overflow-hidden shadow-2xl transition-colors duration-500 [&_.leaflet-container]:!bg-transparent",
-        isDark ? "shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]" : "",
+        mapLayerMode === "satellite"
+          ? "bg-[#050505]"
+          : isDark
+            ? "bg-[#191a1a] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+            : "bg-[#cad2d3]",
         className || "h-[60vh] sm:h-[75vh] min-h-[500px] rounded-[2.5rem] sm:rounded-[3.5rem] border border-slate-200 dark:border-zinc-800"
       )}
     >
