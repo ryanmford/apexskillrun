@@ -110,19 +110,21 @@ export const ASRMap = forwardRef(({
     if (validCoordsCount === 1 && lastValidCoord) {
       const isDesktop = window.innerWidth >= 768;
       const panelWidth = getDesktopPanelOffset();
-      const pt = mapRef.current.project(lastValidCoord, 14);
+      const pt = mapRef.current.project(lastValidCoord, 16);
       if (isDesktop) pt.x -= panelWidth / 2;
       else pt.y += window.innerHeight * 0.15; // Offset for mobile bottom drawer
-      const targetLatLng = mapRef.current.unproject(pt, 14);
-      mapRef.current.flyTo(targetLatLng, 14, { duration: 1.5 });
+      const targetLatLng = mapRef.current.unproject(pt, 16);
+      mapRef.current.flyTo(targetLatLng, 16, { duration: 1.5 });
     } else if (validCoordsCount > 1) {
       if (bounds.isValid()) {
         const isDesktop = window.innerWidth >= 768;
         const panelWidth = getDesktopPanelOffset();
+        const spanMeters = bounds.getNorthEast().distanceTo(bounds.getSouthWest());
+        const targetMaxZoom = spanMeters < 80 ? 20 : spanMeters < 300 ? 18 : 15;
         mapRef.current.fitBounds(bounds, {
           paddingTopLeft: isDesktop ? [panelWidth + (panelWidth > 0 ? 16 : 50), 50] : [16, 50],
           paddingBottomRight: isDesktop ? [50, 50] : [16, window.innerHeight * 0.3 + 50],
-          maxZoom: 12,
+          maxZoom: targetMaxZoom,
           duration: 1.5,
         });
       }
@@ -154,17 +156,18 @@ export const ASRMap = forwardRef(({
 
     if (currentLoc) {
       const bounds = L.latLngBounds([currentLoc, skillCoords]);
+      const distMeters = L.latLng(currentLoc).distanceTo(skillCoords);
       map.fitBounds(bounds, {
         paddingTopLeft: isDesktop ? [panelWidth + 48, 64] : [36, 64],
         paddingBottomRight: isDesktop ? [64, 64] : [36, window.innerHeight * 0.35 + 48],
-        maxZoom: 15,
+        maxZoom: distMeters < 120 ? 19 : 16,
         duration: 1.25,
       });
     } else {
-      const pt = map.project(skillCoords, 15);
+      const pt = map.project(skillCoords, 18);
       if (isDesktop) pt.x -= panelWidth / 2;
       else pt.y += window.innerHeight * 0.18;
-      map.flyTo(map.unproject(pt, 15), 15, { duration: 1.25 });
+      map.flyTo(map.unproject(pt, 18), 18, { duration: 1.25 });
     }
   }, [mapReady, getDesktopPanelOffset]);
 
@@ -294,8 +297,8 @@ export const ASRMap = forwardRef(({
     const targetZoom =
       currentZoom < 14
         ? 14
-        : distMeters < 300 && currentZoom < 16
-          ? Math.min(currentZoom + 1, 16)
+        : distMeters < 300 && currentZoom < 18
+          ? Math.min(currentZoom + 1, 18)
           : currentZoom;
     const duration = distMeters < 50 && targetZoom === currentZoom ? 0.35 : 1.2;
     map.flyTo([latitude, longitude], targetZoom, { duration });
@@ -408,7 +411,7 @@ export const ASRMap = forwardRef(({
       zoomControl: false,
       attributionControl: false,
       minZoom: 2,
-      maxZoom: 18,
+      maxZoom: 21,
       maxBounds: [
         [-90, -180],
         [90, 180],
@@ -448,18 +451,20 @@ export const ASRMap = forwardRef(({
     }
 
     const lightLayer = L.tileLayer(lightTileUrl, {
-      maxZoom: 20,
+      maxZoom: 21,
+      maxNativeZoom: 19,
       noWrap: true,
     });
 
     const darkLayer = L.tileLayer(darkTileUrl, {
-      maxZoom: 20,
+      maxZoom: 21,
+      maxNativeZoom: 19,
       noWrap: true,
       className: !mapboxToken ? "map-tiles-dark" : "",
     });
 
     const satelliteLayer = L.tileLayer(satelliteUrl, {
-      maxZoom: 20,
+      maxZoom: 21,
       maxNativeZoom: 19,
       noWrap: true,
     });
@@ -572,12 +577,52 @@ export const ASRMap = forwardRef(({
       chunkedLoading: true,
       chunkInterval: 100,
       chunkDelay: 16,
-      maxClusterRadius: 50,
+      // Tighter dynamic radius as user zooms in so nearby spots separate naturally
+      maxClusterRadius: (zoom: number) => (zoom >= 17 ? 16 : zoom >= 15 ? 28 : zoom >= 12 ? 38 : 48),
+      // At zoom 18+, dissolve all clusters so every pin sits directly on its true starting coordinate
+      disableClusteringAtZoom: 18,
       showCoverageOnHover: false,
-      spiderfyOnMaxZoom: true,
-      zoomToBoundsOnClick: true,
+      // Never displace pins into synthetic spiderfy circles away from their real coordinates
+      spiderfyOnMaxZoom: false,
+      zoomToBoundsOnClick: false,
       iconCreateFunction: getClusterIcon,
     });
+
+    clusterGroup.on("clusterclick", (e: any) => {
+      if (e.originalEvent) {
+        (e.originalEvent as any)._markerClicked = true;
+      }
+      const cluster = e.layer;
+      if (!cluster || !mapRef.current) return;
+
+      const m = mapRef.current;
+      const bounds: L.LatLngBounds = cluster.getBounds();
+      const isDesktop = window.innerWidth >= 768;
+      const panelWidth = getDesktopPanelOffset();
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      const spanMeters = ne.distanceTo(sw);
+
+      // If all challenges in this cluster are in the same plaza/park (<120m span),
+      // jump straight to unclustered precision view (zoom 18-20) accounting for sidebar/bottom sheet padding
+      if (spanMeters < 2) {
+        const targetZoom = Math.max(m.getZoom() + 2, 20);
+        const center = cluster.getLatLng();
+        const pt = m.project(center, targetZoom);
+        if (isDesktop) pt.x -= panelWidth / 2;
+        else pt.y += window.innerHeight * 0.18;
+        m.flyTo(m.unproject(pt, targetZoom), targetZoom, { duration: 0.9 });
+      } else {
+        const targetMaxZoom = spanMeters < 45 ? 20 : spanMeters < 140 ? 19 : 18;
+        m.fitBounds(bounds, {
+          paddingTopLeft: isDesktop ? [panelWidth + (panelWidth > 0 ? 44 : 56), 56] : [36, 56],
+          paddingBottomRight: isDesktop ? [56, 56] : [36, window.innerHeight * 0.32 + 48],
+          maxZoom: targetMaxZoom,
+          duration: 0.95,
+        });
+      }
+    });
+
     map.addLayer(clusterGroup);
     clusterGroupRef.current = clusterGroup;
 
@@ -615,7 +660,7 @@ export const ASRMap = forwardRef(({
       prevUserLocRenderedRef.current = null;
       setMapReady(false);
     };
-  }, [setMapReady, setIsLocating]); // Send once on mount
+  }, [setMapReady, setIsLocating, getDesktopPanelOffset]); // Send once on mount
 
   // Map Event Handlers
   useEffect(() => {
@@ -754,7 +799,7 @@ export const ASRMap = forwardRef(({
       .replace(/'/g, "&#039;");
   };
 
-  // Helper to create marker icon with 1-100 difficulty rating stamped inside and live distance badge
+  // Helper to create marker icon with 1-100 difficulty rating stamped inside, ground-truth coordinate dot, and live distance badge
   const createPinIcon = (skillOrName: SkillData | string, isActive: boolean, coords?: [number, number] | null) => {
     const skillName = typeof skillOrName === "string" ? skillOrName : (skillOrName?.name || "");
     const skillObj = typeof skillOrName === "string" ? skillDataRef.current.get(skillOrName) : skillOrName;
@@ -774,15 +819,15 @@ export const ASRMap = forwardRef(({
       : 'bg-zinc-900 shadow-[0_0_12px_rgba(0,0,0,0.3)]';
 
     const stemClasses = currentIsDark
-      ? 'from-white/80'
-      : 'from-zinc-900/60';
+      ? 'from-white/85 to-white/40'
+      : 'from-zinc-900/75 to-zinc-900/35';
 
     const tooltipClasses = currentIsDark
       ? 'bg-zinc-950/95 text-white border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.85)]'
       : 'bg-white/95 text-zinc-950 border-black/15 shadow-[0_4px_16px_rgba(0,0,0,0.15)]';
 
     const activeOuterClasses = isActive
-      ? 'scale-[1.4] z-[1000] brightness-110'
+      ? 'scale-[1.35] z-[1000] brightness-110'
       : 'pointer-fine:hover:scale-[1.15] active:scale-95 drop-shadow-lg';
     
     const shortName = getSkillDisplayName(skillName);
@@ -801,7 +846,7 @@ export const ASRMap = forwardRef(({
       : "";
 
     const hoverPillHtml = escapedShortName
-      ? `<div class="absolute bottom-[40px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 pointer-fine:group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 pointer-fine:group-hover:translate-y-0 scale-95 pointer-fine:group-hover:scale-100 z-50 whitespace-nowrap">
+      ? `<div class="absolute bottom-[42px] left-1/2 -translate-x-1/2 pointer-events-none opacity-0 pointer-fine:group-hover:opacity-100 transition-all duration-200 ease-out translate-y-1 pointer-fine:group-hover:translate-y-0 scale-95 pointer-fine:group-hover:scale-100 z-50 whitespace-nowrap">
            <div class="relative flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md ${tooltipClasses}">
              <span class="text-[10px] sm:text-[11px] font-mono font-black tracking-widest uppercase select-none leading-none flex items-center">
                ${escapedShortName}${distBadgeHtml}
@@ -815,6 +860,12 @@ export const ASRMap = forwardRef(({
       ? `border: 2px solid ${tierCfg.pinHex}; box-shadow: 0 0 ${isActive ? '14px' : '6px'} ${tierCfg.pinHex}${isActive ? 'aa' : '55'};`
       : "";
 
+    const anchorDotStyle = hasRating
+      ? `background-color: ${tierCfg.pinHex}; box-shadow: 0 0 6px ${tierCfg.pinHex};`
+      : currentIsDark
+        ? "background-color: #ffffff; box-shadow: 0 0 6px rgba(255,255,255,0.9);"
+        : "background-color: #18181b; box-shadow: 0 0 6px rgba(0,0,0,0.4);";
+
     const pinTextColor = currentIsDark ? "text-white" : "text-zinc-950";
     const innerContentHtml = hasRating
       ? `<span class="relative z-20 font-mono font-black text-[10px] tracking-tighter leading-none select-none ${pinTextColor}">${ratingInt}</span>`
@@ -822,10 +873,10 @@ export const ASRMap = forwardRef(({
 
     return L.divIcon({
       html: `
-        <div class="asr-pin relative flex flex-col items-center justify-center group transition-all duration-300 cursor-pointer ${activeOuterClasses}" style="width: 44px; height: 44px;">
+        <div class="asr-pin relative flex flex-col items-center justify-center group transition-all duration-300 cursor-pointer ${activeOuterClasses}" style="width: 44px; height: 44px; transform-origin: 22px 39px;">
           ${hoverPillHtml}
           <div class="absolute inset-0 bg-transparent"></div>
-          <div class="relative flex flex-col items-center mt-1.5">
+          <div class="relative flex flex-col items-center mt-1">
             <div class="relative w-7 h-7 rounded-full flex items-center justify-center ${outerShadow}" style="${ringStyle}">
               ${!hasRating ? `
                 <div class="absolute inset-0 rounded-full animate-border-shift neon-gradient-base blur-[4px] opacity-50 z-0"></div>
@@ -834,13 +885,14 @@ export const ASRMap = forwardRef(({
               <div class="absolute inset-[1.5px] rounded-full z-10 transition-colors ${innerSurface}"></div>
               ${innerContentHtml}
             </div>
-            <div class="w-[2px] h-[7px] bg-gradient-to-b ${stemClasses} to-transparent rounded-b-full"></div>
+            <div class="w-[1.5px] h-[6px] bg-gradient-to-b ${stemClasses}"></div>
+            <div class="w-[5px] h-[5px] rounded-full border ${currentIsDark ? 'border-black/80' : 'border-white/90'}" style="${anchorDotStyle}"></div>
           </div>
         </div>
       `,
       className: "bg-transparent",
       iconSize: [44, 44],
-      iconAnchor: [22, 38],
+      iconAnchor: [22, 39],
     });
   };
 
@@ -865,6 +917,38 @@ export const ASRMap = forwardRef(({
        clusterGroupRef.current.removeLayers(markersToRemove);
     }
 
+    // Group identical coordinates (< 0.15m apart, 6 decimal places) so exact duplicate takeoff blocks
+    // get a sub-meter micro-fan (±0.6m) rather than burying pins completely underneath one another
+    const coordGroups = new Map<string, string[]>();
+    challenges.forEach((c: SkillData & { parsedCoords?: [number, number] }) => {
+      if (!c.parsedCoords || !c.name) return;
+      const key = `${c.parsedCoords[0].toFixed(6)},${c.parsedCoords[1].toFixed(6)}`;
+      const bucket = coordGroups.get(key);
+      if (bucket) {
+        bucket.push(c.name);
+      } else {
+        coordGroups.set(key, [c.name]);
+      }
+    });
+
+    const resolveDisplayCoords = (c: SkillData & { parsedCoords?: [number, number] }): [number, number] => {
+      const base = c.parsedCoords!;
+      const key = `${base[0].toFixed(6)},${base[1].toFixed(6)}`;
+      const siblings = coordGroups.get(key);
+      if (!siblings || siblings.length <= 1) return base;
+      const idx = siblings.indexOf(c.name);
+      if (idx <= 0) return base;
+      // Sub-meter ring (~0.65m radius) around the shared takeoff block so all pins remain visible & clickable at zoom 20-21
+      const angle = (2 * Math.PI * idx) / siblings.length;
+      const radiusLat = 0.000006; // ~0.65 meters
+      const cosLat = Math.max(0.2, Math.cos((base[0] * Math.PI) / 180));
+      const radiusLng = radiusLat / cosLat;
+      return [
+        base[0] + radiusLat * Math.sin(angle),
+        base[1] + radiusLng * Math.cos(angle),
+      ];
+    };
+
     // Add or update markers without blowing up the whole cluster.
     const newMarkers: L.Marker[] = [];
     let hasMarkerMutated = markersToRemove.length > 0;
@@ -873,13 +957,14 @@ export const ASRMap = forwardRef(({
       const id = c.name;
       if (!c.parsedCoords) return;
 
-      const prevSkill = skillDataRef.current.get(id);
+      const displayCoords = resolveDisplayCoords(c);
+      const prevCoords = skillCoordsRef.current.get(id);
       skillDataRef.current.set(id, c);
-      skillCoordsRef.current.set(id, c.parsedCoords);
+      skillCoordsRef.current.set(id, displayCoords);
       const isActive = activeSkillIdRef.current === id;
 
       if (!markersRef.current.has(id)) {
-        const marker = L.marker(c.parsedCoords, {
+        const marker = L.marker(displayCoords, {
           icon: createPinIcon(c, isActive, c.parsedCoords),
           keyboard: false,
           zIndexOffset: isActive ? 1000 : 0,
@@ -910,20 +995,20 @@ export const ASRMap = forwardRef(({
           if (!mapRef.current) return;
 
           const latestSkill = skillDataRef.current.get(id) || c;
-          const coords = latestSkill.parsedCoords || c.parsedCoords!;
+          const coords = skillCoordsRef.current.get(id) || latestSkill.parsedCoords || c.parsedCoords!;
 
-          // Intelligent Panning
-          const currentZoom = Math.max(mapRef.current.getZoom(), 12);
+          // Intelligent Panning (preserve micro-zoom if already zoomed in, otherwise frame at zoom 16+)
+          const currentZoom = Math.max(mapRef.current.getZoom(), 16);
           const pt = mapRef.current.project(coords, currentZoom);
           const isDesktop = window.innerWidth >= 768;
 
           if (!isDesktop) {
             const targetLatLng = mapRef.current.unproject({ x: pt.x, y: pt.y + window.innerHeight * 0.22 }, currentZoom);
-            mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 1.0 });
+            mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 0.85 });
           } else {
             const panelWidth = getDesktopPanelOffset();
             const targetLatLng = mapRef.current.unproject({ x: pt.x - panelWidth / 2, y: pt.y }, currentZoom);
-            mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 1.0 });
+            mapRef.current.flyTo(targetLatLng, currentZoom, { duration: 0.85 });
           }
 
           if (onPinClickRef.current) onPinClickRef.current(latestSkill);
@@ -942,9 +1027,8 @@ export const ASRMap = forwardRef(({
             existingMarker.setIcon(createPinIcon(c, isActive, c.parsedCoords));
             hasMarkerMutated = true;
           }
-          const prevCoords = prevSkill?.parsedCoords;
-          if (prevCoords && (prevCoords[0] !== c.parsedCoords[0] || prevCoords[1] !== c.parsedCoords[1])) {
-            existingMarker.setLatLng(c.parsedCoords);
+          if (prevCoords && (prevCoords[0] !== displayCoords[0] || prevCoords[1] !== displayCoords[1])) {
+            existingMarker.setLatLng(displayCoords);
             hasMarkerMutated = true;
           }
         }
@@ -976,7 +1060,8 @@ export const ASRMap = forwardRef(({
       for (const [id, marker] of markersRef.current.entries()) {
         const isActive = activeSkillId === id;
         const skillObj = skillDataRef.current.get(id) || id;
-        marker.setIcon(createPinIcon(skillObj, isActive, skillCoordsRef.current.get(id)));
+        const trueCoords = typeof skillObj !== "string" ? skillObj.parsedCoords : skillCoordsRef.current.get(id);
+        marker.setIcon(createPinIcon(skillObj, isActive, trueCoords));
         marker.setZIndexOffset(isActive ? 1000 : 0);
       }
       if (themeChanged) {
@@ -987,7 +1072,8 @@ export const ASRMap = forwardRef(({
         const prevMarker = markersRef.current.get(prevActiveId);
         if (prevMarker) {
           const prevSkillObj = skillDataRef.current.get(prevActiveId) || prevActiveId;
-          prevMarker.setIcon(createPinIcon(prevSkillObj, false, skillCoordsRef.current.get(prevActiveId)));
+          const prevTrueCoords = typeof prevSkillObj !== "string" ? prevSkillObj.parsedCoords : skillCoordsRef.current.get(prevActiveId);
+          prevMarker.setIcon(createPinIcon(prevSkillObj, false, prevTrueCoords));
           prevMarker.setZIndexOffset(hoveredMarkerIdRef.current === prevActiveId ? 10000 : 0);
         }
       }
@@ -995,7 +1081,8 @@ export const ASRMap = forwardRef(({
         const nextMarker = markersRef.current.get(activeSkillId);
         if (nextMarker) {
           const nextSkillObj = skillDataRef.current.get(activeSkillId) || activeSkillId;
-          nextMarker.setIcon(createPinIcon(nextSkillObj, true, skillCoordsRef.current.get(activeSkillId)));
+          const nextTrueCoords = typeof nextSkillObj !== "string" ? nextSkillObj.parsedCoords : skillCoordsRef.current.get(activeSkillId);
+          nextMarker.setIcon(createPinIcon(nextSkillObj, true, nextTrueCoords));
           nextMarker.setZIndexOffset(1000);
         }
       }
