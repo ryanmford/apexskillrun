@@ -2,7 +2,7 @@
  
 import React, { useMemo, startTransition, useRef } from "react";
 import { useSearchParams, useLocation } from "react-router-dom";
-import { ASRDataTable } from "../ASRComponents";
+import { ASRDataTable } from "../list/ASRDataTable";
 import { ErrorBoundary } from "../common/ErrorBoundary";
 import { ASRBottomSheet } from "../common/ASRBottomSheet";
 import { SkillData } from "../../types";
@@ -20,12 +20,15 @@ import {
   toggleRatingTierParam,
   parseSearchQueryWithRating,
   createSlug,
+  normalizeForSearch,
 } from "../../lib/asr-utils";
-import { normalizeForSearch } from "../../lib/utils";
 import { ChevronLeft, ChevronRight, X, Compass, Navigation } from "lucide-react";
 import { ASRSearchInput } from "../common/ASRSearchInput";
 
 const ASRMap = React.lazy(() => import("../ASRMap").then((m) => ({ default: m.ASRMap })));
+
+const DEFAULT_MAP_SHEET_SNAP = 0.2;
+const MAP_SHEET_SNAP_POINTS = [0, 0.2, 0.5, 0.85];
 
 type MapSortMode = "sends_desc" | "sends_asc" | "easiest" | "hardest" | "nearest";
 
@@ -89,9 +92,11 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   const scrollContainerRefMobile = React.useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [visibleBounds, setVisibleBounds] = React.useState<MapBounds | null>(null);
-  const [snap, setSnap] = React.useState<number>(0.2);
+  const [snap, setSnap] = React.useState<number>(DEFAULT_MAP_SHEET_SNAP);
+  const [snapResetKey, setSnapResetKey] = React.useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const setActiveSkillId = useAppStore(s => s.setActiveSkillId);
+  const setIsNavCompact = useAppStore(s => s.setIsNavCompact);
   const userLocation = useAppStore(s => s.userLocation);
   const skillSortMode = useAppStore(s => s.skillSortMode);
   const setSkillSortMode = useAppStore(s => s.setSkillSortMode);
@@ -306,7 +311,10 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   React.useEffect(() => {
     if (refreshTrigger > prevRefreshTrigger.current) {
       prevRefreshTrigger.current = refreshTrigger;
-      // Reset view to default when nav dock button is clicked while active
+      // Reset view & bottom sheet to default when nav dock challenges button is clicked while active
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       setSkillSortMode("runs");
       startTransition(() => {
         setSearchParams(prev => {
@@ -318,7 +326,9 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         }, { replace: true, state: location.state });
       });
       setActiveSkillId(null);
-      setSnap(0.2);
+      setIsNavCompact(false);
+      setSnap(DEFAULT_MAP_SHEET_SNAP);
+      setSnapResetKey((k) => k + 1);
       if (mapRef.current?.resetView) {
         mapRef.current.resetView();
       }
@@ -329,7 +339,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         scrollContainerRefMobile.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
-  }, [refreshTrigger, setActiveSkillId, setSnap, setSearchParams, location.state, searchKey, setSkillSortMode]);
+  }, [refreshTrigger, setActiveSkillId, setIsNavCompact, setSearchParams, location.state, searchKey, setSkillSortMode]);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -526,9 +536,16 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
   }, [navigateToEntity, setActiveSkillId]);
 
   const handleMapBackgroundClick = React.useCallback(() => {
-     setSnap(0.2);
-     setActiveSkillId(null);
+    setSnap((prev) => (prev > DEFAULT_MAP_SHEET_SNAP ? DEFAULT_MAP_SHEET_SNAP : prev));
+    setActiveSkillId(null);
   }, [setActiveSkillId]);
+
+  const handleSheetSnapChange = React.useCallback((nextSnap: number) => {
+    setSnap(nextSnap);
+    if (nextSnap < 0.8) {
+      setIsNavCompact(false);
+    }
+  }, [setIsNavCompact]);
 
   const renderListContent = (currentSnap: number, scrollRef: React.RefObject<HTMLDivElement>, dRef: React.RefObject<any>) => {
     const skillCount = validSkillList.length;
@@ -656,11 +673,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
 
       <div 
         ref={scrollRef}
-        onPointerDown={(e) => {
-          if (currentSnap >= 0.5) {
-            e.stopPropagation();
-          }
-        }}
+        data-sheet-scrollable="true"
         onScroll={(e) => {
           if (window.innerWidth < 768) {
             const target = e.target as HTMLDivElement;
@@ -668,7 +681,7 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
           }
         }}
         className="flex-1 px-0 pb-4 pt-0 overflow-y-auto overscroll-none"
-        style={{ touchAction: currentSnap >= 0.5 ? 'pan-y' : 'none' }}
+        style={{ touchAction: currentSnap >= 0.8 ? 'pan-y' : 'none' }}
       >
         {!isLoading && visibleRealSkillsCount === 0 && nearestOverallSkill ? (
           <div className="px-4">
@@ -860,12 +873,14 @@ export const MapSkillsView = React.memo(({ theme }: { theme: "light" | "dark" })
         /* Mobile Bottom Sheet */
         <div className="md:hidden pointer-events-none absolute inset-0 z-50">
           <ASRBottomSheet
-            snapPoints={[0.2, 0.5, 0.85]}
-            activeSnap={snap as number}
-            onSnapChange={setSnap}
+            snapPoints={MAP_SHEET_SNAP_POINTS}
+            initialSnap={DEFAULT_MAP_SHEET_SNAP}
+            activeSnap={snap}
+            onSnapChange={handleSheetSnapChange}
+            resetSignal={snapResetKey}
           >
             <div className="flex-1 overflow-hidden h-full pt-2">
-              {renderListContent(snap as number, scrollContainerRefMobile, listRefMobile)}
+              {renderListContent(snap, scrollContainerRefMobile, listRefMobile)}
             </div>
           </ASRBottomSheet>
         </div>

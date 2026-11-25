@@ -4,9 +4,10 @@ import React, { useMemo, startTransition } from "react";
 import { useSearchParams, useLocation } from "react-router-dom";
 import { useDebounce } from "../../hooks/useDataHooks";
 import { PageHeader } from "../common/PageHeader";
-import { ASRSearchInput, ASRDataTable } from "../ASRComponents";
+import { ASRSearchInput } from "./ASRSearchInput";
+import { ASRDataTable } from "../list/ASRDataTable";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { normalizeForSearch } from "../../lib/utils";
+import { normalizeForSearch } from "../../lib/asr-utils";
 
 interface AnimatedListViewProps {
   _categoryName?: string;

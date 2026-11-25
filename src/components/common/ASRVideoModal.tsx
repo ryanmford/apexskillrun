@@ -148,8 +148,6 @@ export const ASRVideoModal = () => {
     }
   }, [location.pathname, location.search, location.state, navigate, setPlayingVideoUrl]);
 
-  const isVerticalOptimized = true;
-
   useEffect(() => {
     if (isOpen) {
       const original = document.body.style.overflow;
@@ -176,12 +174,7 @@ export const ASRVideoModal = () => {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div
-          className={cn(
-            "fixed inset-0 z-[120] flex items-center justify-center pointer-events-auto",
-            isVerticalOptimized ? "p-0 sm:p-6 lg:p-12" : "p-4 sm:p-6 lg:p-12",
-          )}
-        >
+        <div className="fixed inset-0 z-[120] flex items-center justify-center pointer-events-auto p-0 sm:p-6 lg:p-12">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -202,22 +195,13 @@ export const ASRVideoModal = () => {
             onDragEnd={(_e, info) => {
               if (info.offset.y > 100) handleClose();
             }}
-            className={cn(
-              "relative mx-auto overflow-hidden flex flex-col pointer-events-auto shadow-[0_0_80px_rgba(0,0,0,0.5)] bg-black",
-              isVerticalOptimized
-                ? "w-full h-full sm:w-auto sm:h-[85vh] sm:max-h-[900px] sm:aspect-[9/16] rounded-none sm:rounded-[32px] sm:ring-1 sm:ring-white/10 shrink-0"
-                : "w-full max-w-5xl h-full sm:h-auto sm:max-h-[85vh] rounded-none sm:rounded-3xl sm:ring-1 sm:ring-white/10 shrink-0",
-            )}
-            style={isVerticalOptimized ? {} : { aspectRatio: "16/9" }}
+            className="relative mx-auto overflow-hidden flex flex-col pointer-events-auto shadow-[0_0_80px_rgba(0,0,0,0.5)] bg-black w-full h-full sm:w-auto sm:h-[85vh] sm:max-h-[900px] sm:aspect-[9/16] rounded-none sm:rounded-[32px] sm:ring-1 sm:ring-white/10 shrink-0"
           >
             {/* Overlay Gradient for Close Button */}
             <div className="absolute top-0 inset-x-0 z-20 h-40 bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-none" />
 
             {/* Close Button */}
-            <div
-              className="absolute right-0 z-30 flex justify-end p-4 sm:p-6 pointer-events-none"
-              style={{ top: "max(1rem, env(safe-area-inset-top, 2rem))" }}
-            >
+            <div className="absolute right-0 z-30 flex justify-end p-4 sm:p-6 pointer-events-none top-[max(1rem,var(--safe-top))]">
               <button
                 type="button"
                 onClick={handleClose}

@@ -364,6 +364,7 @@ export const HomeView = React.memo(() => {
     const pFlags = new Set<string>();
     [...(playerList_M_AT || []), ...(playerList_F_AT || [])].forEach(
       (p: any) => {
+        if (!p || p.isDivider) return;
         [p.gymFlag, p.townFlag, p.region].forEach((f) => {
           if (f) {
             const matches = String(f).match(flagRegex);
@@ -433,7 +434,7 @@ export const HomeView = React.memo(() => {
       <motion.div
         variants={itemVariants}
         className={cn(
-          "relative h-[105dvh] sm:h-[105dvh] w-[100vw] ml-[calc(50%-50vw)] mr-[calc(50%-50vw)] flex flex-col justify-start overflow-hidden transition-all duration-500 group border-b z-10",
+          "relative h-[105dvh] sm:h-[105dvh] w-[100vw] ml-[calc(50%-50vw)] mr-[calc(50%-50vw)] flex flex-col justify-start overflow-hidden transition-colors duration-500 group border-b z-10",
           theme === "dark"
             ? "bg-[#0A0A0A] border-white/5"
             : "bg-black border-white/10",

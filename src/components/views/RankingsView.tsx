@@ -12,9 +12,14 @@ export const RankingsView = React.memo(({ theme }: { theme: "light" | "dark" }) 
   const gen = useAppStore(s => s.gen);
   const setGen = useAppStore(s => s.setGen);
   const setTeamCategory = useAppStore(s => s.setTeamCategory);
-  const { navigateToEntity } = useAppNavigation();
+  const { navigateToEntity, prefetchEntity } = useAppNavigation();
   const { eventType, searchParams, setSearchParams } = useURLState();
   const location = useLocation();
+
+  useEffect(() => {
+    const t = window.setTimeout(() => prefetchEntity(), 150);
+    return () => window.clearTimeout(t);
+  }, [prefetchEntity]);
 
   const queryMode = searchParams.get("mode");
   const pathMode = location.pathname.includes("/teams") ? "teams" : (location.pathname.includes("/gyms") ? "gyms" : (location.pathname.includes("/players") ? "players" : null));

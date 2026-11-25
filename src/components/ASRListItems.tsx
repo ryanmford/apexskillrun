@@ -129,9 +129,9 @@ export const ASRListItem = React.memo(
  }
  }}
  className={cn(
- "group flex items-center transition-all duration-300 ios-clip-fix py-5 sm:py-6 lg:py-8 px-0 outline-none w-full text-left",
+ "group flex items-center transition-[transform,background-color,border-color] duration-150 ios-clip-fix py-5 sm:py-6 lg:py-8 px-0 outline-none w-full text-left",
  onClick
- ? `cursor-pointer active:scale-95 active:bg-zinc-500/10 hover:scale-[1.01] focus-visible:outline-none focus-visible:bg-zinc-500/5 focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-zinc-500 rounded-xl ${tableHover}`
+ ? `cursor-pointer active:scale-[0.98] active:bg-zinc-500/10 sm:hover:scale-[1.01] focus-visible:outline-none focus-visible:bg-zinc-500/5 focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-zinc-500 rounded-xl ${tableHover}`
  : "cursor-default",
  getTableHighlightClass(),
  shouldFade ? "opacity-40 grayscale" : "opacity-100",
@@ -300,7 +300,7 @@ export const ASRListItem = React.memo(
  }
  }}
  className={cn(
- "group flex items-center justify-between transition-all duration-300 ios-clip-fix outline-none text-left w-full",
+ "group flex items-center justify-between transition-[transform,background-color,border-color] duration-150 ios-clip-fix outline-none text-left w-full",
  isCompact
  ? cn("py-3 pl-3 rounded-[1.25rem] border h-auto min-h-[66px]", showVideoIcon ? "pr-3" : "pr-3.5")
  : cn(
@@ -308,7 +308,7 @@ export const ASRListItem = React.memo(
      showVideoIcon ? "pr-3 sm:pr-5" : "pr-3.5 sm:pr-6",
    ),
  onClick && !isUnclaimed
- ? `cursor-pointer active:scale-95 hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 ${"theme-focus"} ${cardHover}`
+ ? `cursor-pointer active:scale-[0.98] sm:hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 ${"theme-focus"} ${cardHover}`
  : "cursor-default",
  isUnclaimed
  ? cn(

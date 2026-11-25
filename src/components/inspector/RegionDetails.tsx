@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { cn, CONFIG, formatLocation, normalizeName, fixCountryEntity, getCombinedFlags } from "../../lib/asr-utils";
+import { cn, normalizeName, fixCountryEntity, getCombinedFlags, matchesRegionTarget } from "../../lib/asr-utils";
 import { ASRStatCard } from "../common/ASRStatCard";
 import { FallbackAvatar } from "../common/FallbackAvatar";
 import { ProfileHeader, InspectorTabContainer } from "./InspectorComponents";
@@ -63,78 +63,14 @@ export const RegionDetails = React.memo(
     };
 
     const regionNameUpper = region.name.toUpperCase().replace(/[\uD83C][\uDDE6-\uDDFF]|\p{Extended_Pictographic}/gu, '').trim();
-    const targetTokens = regionNameUpper.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-
     const parts = regionNameUpper.split(",");
     const potentialCountry = parts[parts.length - 1]?.trim() || "";
     const computedFlagInfo = fixCountryEntity(potentialCountry, region.flag || "");
-    const finalFlag = (computedFlagInfo.flag && computedFlagInfo.flag !== "🏳️") 
-      ? computedFlagInfo.flag 
+    const finalFlag = (computedFlagInfo.flag && computedFlagInfo.flag !== "🏳️")
+      ? computedFlagInfo.flag
       : getCombinedFlags(region.name);
 
-    const isTokenMatch = (objTokens: string[]): boolean => {
-      if (!objTokens || objTokens.length === 0) return false;
-      
-      if (objTokens.length >= targetTokens.length) {
-        // Object provides as much or more detail as region. 
-        // All region requirements must be satisfied by object.
-        return targetTokens.every(t => objTokens.includes(t));
-      } else {
-        // Object provides less detail than region (e.g. missing state).
-        // It must be referring to the same specific place (tokens[0] === targetTokens[0])
-        // And have no conflicts (all tokens are in targetTokens).
-        return objTokens[0] === targetTokens[0] && objTokens.every(t => targetTokens.includes(t));
-      }
-    };
-
-    const isCountryOnlyRegion =
-      targetTokens.length === 1 &&
-      computedFlagInfo.name !== CONFIG.FALLBACKS.UNKNOWN_LOCATION &&
-      computedFlagInfo.flag !== "🏳️";
-
-    const matchRegion = (obj: any): boolean => {
-      const locStr = formatLocation(obj);
-      if (!locStr || locStr === "UNKNOWN") return false;
-
-      if (isCountryOnlyRegion) {
-        const regionFlags = getCombinedFlags(region.flag, finalFlag).split(" ").filter(Boolean);
-        if (regionFlags.length > 0) {
-          const playerFlags = getCombinedFlags(obj.flag, obj.country, obj.location, obj.region, obj.state, locStr).split(" ").filter(Boolean);
-          for (const flag of regionFlags) {
-            if (flag !== "🏳️" && playerFlags.includes(flag)) {
-              return true;
-            }
-          }
-        }
-      }
-
-      const strippedLocStr = locStr.replace(/[\uD83C][\uDDE6-\uDDFF]|\p{Extended_Pictographic}/gu, '').trim();
-
-      const objTokens = strippedLocStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-
-      if (isTokenMatch(objTokens)) {
-         return true;
-      }
-      
-      const rawValues = [
-        obj.city, obj.country, obj.state, obj.stateProv, obj.location, obj.region, obj.teamLocation, obj.homeGym
-      ].filter(Boolean).map(v => String(v).toUpperCase().replace(/[\uD83C][\uDDE6-\uDDFF]|\p{Extended_Pictographic}/gu, '').trim());
-      
-      if (Array.isArray(obj.teams)) {
-          obj.teams.forEach((t: any) => {
-              if (t.location) rawValues.push(String(t.location).toUpperCase().replace(/[\uD83C][\uDDE6-\uDDFF]|\p{Extended_Pictographic}/gu, '').trim());
-          });
-      }
-      
-      for (const rv of rawValues) {
-          const rvTokens = rv.split(',').map(s => s.trim()).filter(Boolean);
-          if (isTokenMatch(rvTokens)) {
-              return true;
-          }
-      }
-
-      return false;
-    };
+    const matchRegion = (obj: any): boolean => matchesRegionTarget(region, obj);
 
     const regionalSkills = useMemo(() => {
       const allSkills = (dataContext.masterSkillList || []) as any[];

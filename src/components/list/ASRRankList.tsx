@@ -1,6 +1,5 @@
 import React, { useContext } from "react";
 import { Activity, Calendar } from "lucide-react";
-import { motion } from "motion/react";
 import {
   cn,
   isPlaceholderPlayer,
@@ -233,10 +232,8 @@ export const ASRRankList = ({
       {title && (
         <ASRSectionHeading title={title} theme={theme as "dark" | "light"} />
       )}
-      <motion.div
+      <div
         key={listRenderKey}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
         className="flex flex-col gap-3 overflow-visible"
       >
         {finalAthletes && finalAthletes.length > 0 ? (
@@ -482,7 +479,7 @@ export const ASRRankList = ({
             </h2>
           </div>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 };

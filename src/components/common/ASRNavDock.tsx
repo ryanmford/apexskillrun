@@ -146,22 +146,21 @@ export const ASRNavDock = React.memo(
       <div
         className={cn(
           "fixed left-1/2 -translate-x-1/2 z-[100] px-4 w-full pointer-events-none transition-all duration-500 ease-out flex justify-center items-center",
-          isCompact ? "max-w-[320px]" : "max-w-[400px]",
+          isCompact ? "max-w-[332px]" : "max-w-[392px]",
           isKeyboardOpen
             ? "translate-y-24 opacity-0 pointer-events-none"
             : "translate-y-0 opacity-100",
         )}
         style={{
-          bottom: `calc(24px + env(safe-area-inset-bottom, 0px))`,
-          height: "64px",
+          bottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) - 11px))",
+          height: "58px",
         }}
       >
         <div className="relative group pointer-events-auto w-full">
           {/* Main Glass Container */}
           <nav
             className={cn(
-              "relative flex items-center justify-around rounded-full border backdrop-blur-2xl transition-all duration-500 ease-out",
-              isCompact ? "px-1.5 py-1" : "p-1.5",
+              "relative flex items-center justify-around rounded-full border backdrop-blur-2xl transition-all duration-500 ease-out p-1",
               theme === "dark"
                 ? "bg-zinc-900/60 border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.5)]"
                 : "bg-white/70 border-black/[0.04] shadow-[0_20px_40px_rgba(0,0,0,0.12)]",
@@ -178,16 +177,14 @@ export const ASRNavDock = React.memo(
                   key={item.id}
                   aria-label={`View ${item.label}`}
                   onMouseEnter={() => {
-                    if (item.id === "challenges" || item.id === "map") import("../views/MapSkillsView");
+                    if (item.id === "challenges") import("../views/MapSkillsView");
                     if (item.id === "rankings") import("../views/RankingsView");
-                    if (item.id === "hof" || item.id === "wall-of-fame")
-                      import("../views/ASRWallOfFame");
+                    if (item.id === "hof") import("../views/ASRWallOfFame");
                   }}
                   onTouchStart={() => {
-                    if (item.id === "challenges" || item.id === "map") import("../views/MapSkillsView");
+                    if (item.id === "challenges") import("../views/MapSkillsView");
                     if (item.id === "rankings") import("../views/RankingsView");
-                    if (item.id === "hof" || item.id === "wall-of-fame")
-                      import("../views/ASRWallOfFame");
+                    if (item.id === "hof") import("../views/ASRWallOfFame");
                   }}
                   onClick={() => {
                     if (item.id === "submit") {
@@ -195,6 +192,11 @@ export const ASRNavDock = React.memo(
                       return;
                     }
                     if (isActive || (item.id === "hof" && currentView === "hof")) {
+                      if (item.id === "challenges") {
+                        setIsCompact(false);
+                        triggerRefresh();
+                        return;
+                      }
                       window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
                       if (document.scrollingElement) {
                         document.scrollingElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
@@ -211,8 +213,8 @@ export const ASRNavDock = React.memo(
                   whileTap={{ scale: 0.82 }}
                   style={{ WebkitTapHighlightColor: "transparent" }}
                   className={cn(
-                    "relative flex flex-col items-center justify-center flex-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer overflow-visible",
-                    isCompact ? "h-11" : "h-12",
+                    "relative flex flex-col items-center justify-center flex-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 cursor-pointer overflow-visible transition-[height] duration-500 ease-out",
+                    isCompact ? "h-10" : "h-12",
                     isActive ? "z-20" : "z-10",
                   )}
                 >

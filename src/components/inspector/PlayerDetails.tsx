@@ -377,23 +377,14 @@ export const PlayerDetails = React.memo(
                     { label: "POINTS", value: (stats.pts || 0).toFixed(2) },
                     { label: "SENDS", value: stats.sends },
                     { label: "1ST SENDS", value: stats.firstSends },
-                  ].map((s, i) => (
-                    <motion.div
-                      key={s.label}
-                      className="flex"
-                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      transition={{
-                        delay: i * 0.05,
-                        duration: 0.3
-                      }}
-                    >
+                  ].map((s) => (
+                    <div key={s.label} className="flex">
                       <ASRStatCard
                         label={s.label}
                         value={s.value}
                         glowClass={s.glow}
                       />
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -503,19 +494,10 @@ export const PlayerDetails = React.memo(
                       label: "🪙",
                       value: (meta.contributionScore || 0).toFixed(2),
                     },
-                  ].map((s, i) => (
-                    <motion.div
-                      key={s.label}
-                      className="flex"
-                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      transition={{
-                        delay: i * 0.05,
-                        duration: 0.3,
-                      }}
-                    >
+                  ].map((s) => (
+                    <div key={s.label} className="flex">
                       <ASRStatCard label={s.label} value={s.value} />
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               </div>

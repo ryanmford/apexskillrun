@@ -77,6 +77,8 @@ export const ASRMap = forwardRef(({
   const mapRef = useRef<L.Map | null>(null);
   const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null);
   const tileLayersRef = useRef<{ light?: L.TileLayer; dark?: L.TileLayer; satellite?: L.TileLayer }>({});
+  const activeTileLayerRef = useRef<L.TileLayer | null>(null);
+  const layerSwapCleanupRef = useRef<(() => void) | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const skillDataRef = useRef<Map<string, SkillData>>(new Map());
   const skillCoordsRef = useRef<Map<string, [number, number]>>(new Map());
@@ -506,13 +508,14 @@ export const ASRMap = forwardRef(({
 
     // Only attach the active theme/mode's tile layer so we never fetch 2x retina tiles simultaneously
     const initialLayerMode = useAppStore.getState().mapLayerMode;
-    if (initialLayerMode === "satellite") {
-      satelliteLayer.addTo(map);
-    } else if (isDarkRef.current) {
-      darkLayer.addTo(map);
-    } else {
-      lightLayer.addTo(map);
-    }
+    const initialLayer =
+      initialLayerMode === "satellite"
+        ? satelliteLayer
+        : isDarkRef.current
+          ? darkLayer
+          : lightLayer;
+    initialLayer.addTo(map);
+    activeTileLayerRef.current = initialLayer;
     tileLayersRef.current = { light: lightLayer, dark: darkLayer, satellite: satelliteLayer };
 
     const getClusterIcon = (cluster: any) => {
@@ -653,6 +656,11 @@ export const ASRMap = forwardRef(({
         window.removeEventListener("deviceorientationabsolute" as any, orientationListenerRef.current as any, true);
         orientationListenerRef.current = null;
       }
+      if (layerSwapCleanupRef.current) {
+        layerSwapCleanupRef.current();
+        layerSwapCleanupRef.current = null;
+      }
+      activeTileLayerRef.current = null;
       setIsLocating(false);
       if (mapRef.current) {
         mapRef.current.remove();
@@ -763,25 +771,61 @@ export const ASRMap = forwardRef(({
     return () => clearTimeout(timer);
   }, [mapReady]);
 
-  // Theme & Satellite synchronization for Tiles (only mount active layer so inactive tiles are never fetched)
+  // Theme & Satellite synchronization for Tiles (only active layer remains mounted; wait for incoming tiles before removing previous layer)
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !tileLayersRef.current) return;
     const map = mapRef.current;
     const { light, dark, satellite } = tileLayersRef.current;
-    if (light && dark && satellite) {
-      if (mapLayerMode === "satellite") {
-        if (!map.hasLayer(satellite)) satellite.addTo(map);
-        if (map.hasLayer(dark)) map.removeLayer(dark);
-        if (map.hasLayer(light)) map.removeLayer(light);
-      } else if (isDark) {
-        if (!map.hasLayer(dark)) dark.addTo(map);
-        if (map.hasLayer(light)) map.removeLayer(light);
-        if (map.hasLayer(satellite)) map.removeLayer(satellite);
-      } else {
-        if (!map.hasLayer(light)) light.addTo(map);
-        if (map.hasLayer(dark)) map.removeLayer(dark);
-        if (map.hasLayer(satellite)) map.removeLayer(satellite);
+    if (!mapReady || !map || !light || !dark || !satellite) return;
+
+    const nextLayer =
+      mapLayerMode === "satellite"
+        ? satellite
+        : isDark
+          ? dark
+          : light;
+
+    const prevLayer = activeTileLayerRef.current;
+    if (prevLayer === nextLayer && map.hasLayer(nextLayer)) {
+      return;
+    }
+
+    if (layerSwapCleanupRef.current) {
+      layerSwapCleanupRef.current();
+      layerSwapCleanupRef.current = null;
+    }
+
+    const allLayers = [light, dark, satellite];
+    allLayers.forEach((layer) => {
+      if (layer !== nextLayer && layer !== prevLayer && map.hasLayer(layer)) {
+        map.removeLayer(layer);
       }
+    });
+
+    if (!map.hasLayer(nextLayer)) {
+      nextLayer.addTo(map);
+    }
+    nextLayer.bringToFront();
+    activeTileLayerRef.current = nextLayer;
+
+    if (prevLayer && prevLayer !== nextLayer && map.hasLayer(prevLayer)) {
+      let cleaned = false;
+      const removePrev = () => {
+        if (cleaned) return;
+        cleaned = true;
+        nextLayer.off("load", removePrev);
+        clearTimeout(fallbackTimer);
+        if (mapRef.current && mapRef.current.hasLayer(prevLayer) && activeTileLayerRef.current !== prevLayer) {
+          mapRef.current.removeLayer(prevLayer);
+        }
+      };
+
+      const fallbackTimer = setTimeout(removePrev, 800);
+      nextLayer.once("load", removePrev);
+      layerSwapCleanupRef.current = () => {
+        cleaned = true;
+        nextLayer.off("load", removePrev);
+        clearTimeout(fallbackTimer);
+      };
     }
   }, [isDark, mapLayerMode, mapReady]);
 

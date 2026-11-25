@@ -8,8 +8,8 @@ import {
   CONFIG,
   getNormalizedNameList,
   parseSkillDifficulty,
+  normalizeForSearch,
 } from "./asr-utils";
-import { normalizeForSearch } from "./utils";
 
 export const parseSafeDate = (dStr: string | null | undefined): Date | null => {
   if (!dStr) return null;

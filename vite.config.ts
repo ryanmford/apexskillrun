@@ -13,9 +13,10 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        injectRegister: 'auto',
+        injectRegister: null,
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+          globIgnores: ['**/assets/aistudio/**', '**/og/**'],
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
             {
@@ -46,7 +47,7 @@ export default defineConfig(({mode}) => {
         output: {
           manualChunks: {
             'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-            'ui-vendor': ['lucide-react', 'motion', 'clsx', 'tailwind-merge'],
+            'ui-vendor': ['lucide-react', 'motion'],
             'chart-vendor': ['recharts'],
             'state-vendor': ['zustand']
           }

@@ -39,7 +39,8 @@
 
 :root {
   /* Safe Area Insets for modern mobile browsers (PWA/Mobile Notch support) */
-  --safe-top: env(safe-area-inset-top, 0px);
+  --pwa-top-clear: 0px;
+  --safe-top: calc(env(safe-area-inset-top, 0px) + var(--pwa-top-clear));
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   /* Fixed Layout Heights used in your React component logic */
@@ -47,6 +48,20 @@
   --nav-height-mobile: 68px;
   --nav-height-desktop: 76px;
   --bottom-nav-height: 84px;
+}
+
+/* Shift top bars slightly (~10px) in iOS standalone PWA mode to ease out of the heaviest OS top-edge blur
+   without creating a noticeable gap or altering layout on standard mobile browsers, Android, or desktop */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --pwa-top-clear: 10px;
+    }
+  }
+}
+
+html[data-ios-pwa="true"] {
+  --pwa-top-clear: 10px;
 }
 
 /* Premium Scrollbar Reset - Keeps the UI clean and minimalist */
@@ -141,23 +156,21 @@ video::-webkit-media-controls-start-playback-button {
   animation: subtle-pulse 3s infinite ease-in-out;
 }
 
-@keyframes marquee {
-  0% {
-    transform: translateX(0) translateZ(0);
-  }
-  100% {
-    transform: translateX(-50%) translateZ(0);
-  }
-}
-.animate-marquee {
-  display: flex;
-  width: max-content;
-  animation: marquee 400s linear infinite;
-}
-@media (hover: hover) and (pointer: fine) {
-  .animate-marquee:hover {
-    animation-play-state: paused;
-  }
+.ticker-edge-mask {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 1.5rem,
+    black calc(100% - 1.5rem),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 1.5rem,
+    black calc(100% - 1.5rem),
+    transparent
+  );
 }
 
 .glow-gold {
@@ -228,41 +241,6 @@ video::-webkit-media-controls-start-playback-button {
   color: white !important;
 }
 
-.floating-nav-dock {
-  position: fixed;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  width: min(88%, 420px);
-  pointer-events: none;
-}
-
-.floating-nav-inner {
-  pointer-events: auto;
-  height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  border-radius: 999px;
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    inset 0 1px 1px rgba(255, 255, 255, 0.1);
-  padding: 0 12px;
-  position: relative;
-}
-
-.floating-nav-item-active-dot {
-  position: absolute;
-  bottom: 8px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #3b82f6;
-  box-shadow: 0 0 8px #3b82f6;
-}
-
 .textured-surface::after {
   content: "";
   position: absolute;
@@ -272,43 +250,12 @@ video::-webkit-media-controls-start-playback-button {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-.asr-cluster {
-  background: rgba(37, 99, 235, 0.9);
-  border: 2.5px solid #ffffff;
-  color: white;
-  font-weight: 900;
-  font-family: sans-serif;
-  border-radius: 50%;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease;
-}
-.asr-cluster:hover {
-  transform: scale(1.1);
-}
-
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
-}
-
-.search-bubble {
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.1),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  font-size: 16px !important;
-  touch-action: manipulation;
-}
-.search-bubble:focus-within {
-  box-shadow:
-    0 15px 40px rgba(0, 0, 0, 0.2),
-    0 0 0 2px rgba(37, 99, 235, 0.4);
 }
 
 .mask-image-bottom {

@@ -191,7 +191,7 @@ export const ASRWallOfFame = React.memo(
             <div
               key={sec.k}
               id={`hof-${sec.k}`}
-              className="scroll-mt-[calc(env(safe-area-inset-top,0px)+5.5rem)] sm:scroll-mt-28 flex flex-col gap-1.5 sm:gap-5"
+              className="scroll-mt-[calc(var(--safe-top)+5.5rem)] sm:scroll-mt-28 flex flex-col gap-1.5 sm:gap-5"
             >
               <ASRSectionHeading
                 title={sec.l}
@@ -209,24 +209,35 @@ export const ASRWallOfFame = React.memo(
                   {(() => {
                     const limit = visibleCounts[sec.k] || 10;
                     const items = (stats.topStats as Record<string, any[]>)[sec.k] || [];
+                    const isSetterBoard = ["impact", "sets"].includes(sec.k);
+                    const formatDisplayVal = (a: any) => {
+                      if (sec.k === "rating") return (a.rating || 0).toFixed(2);
+                      if (sec.k === "pts") return (a.pts || 0).toFixed(2);
+                      if (sec.k === "contributionScore") return (a.contributionScore || 0).toFixed(2);
+                      if (sec.k === "impact") return a.impact || 0;
+                      if (sec.k === "sets") return a.sets || 0;
+                      if (sec.k === "cities") return a.cities || 0;
+                      if (sec.k === "countries") return a.countries || 0;
+                      return a[sec.k] || 0;
+                    };
+
+                    let currentRank = 1;
+                    let prevValKey: string | null = null;
+                    const rankedVisibleItems = items.slice(0, limit).map((a: any, i: number) => {
+                      const displayVal = formatDisplayVal(a);
+                      const valKey = String(displayVal);
+                      if (i > 0 && valKey !== prevValKey) {
+                        currentRank = i + 1;
+                      }
+                      prevValKey = valKey;
+                      return { a, displayVal, rank: currentRank };
+                    });
+
                     return (
                       <>
-                        {items.slice(0, limit).map((a: any, i: number) => {
-                          const isSetterBoard = ["impact", "sets"].includes(sec.k);
-                          let displayVal: any;
-                          if (sec.k === "rating")
-                            displayVal = (a.rating || 0).toFixed(2);
-                          else if (sec.k === "pts")
-                            displayVal = (a.pts || 0).toFixed(2);
-                          else if (sec.k === "contributionScore")
-                            displayVal = (a.contributionScore || 0).toFixed(2);
-                          else if (sec.k === "impact") displayVal = a.impact || 0;
-                          else if (sec.k === "sets") displayVal = a.sets || 0;
-                          else if (sec.k === "cities") displayVal = a.cities || 0;
-                          else if (sec.k === "countries") displayVal = a.countries || 0;
-                          else displayVal = a[sec.k] || 0;
-
-                          const isTop3 = i < 3;
+                        {rankedVisibleItems.map(({ a, displayVal, rank }, i: number) => {
+                          const isTop3 = rank <= 3;
+                          const isFirst = rank === 1;
                           const flags = getCombinedFlags(a);
                           const hoverClass =
                             theme === "dark"
@@ -246,11 +257,11 @@ export const ASRWallOfFame = React.memo(
                               className={cn(
                                 "flex items-center justify-between py-1.5 xs:py-2 sm:py-5 px-3.5 sm:px-6 transition-colors duration-150 group relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset select-none",
                                 hoverClass,
-                                i === 0 && (theme === "dark" ? "bg-white/[0.02]" : "bg-black/[0.02]")
+                                isFirst && (theme === "dark" ? "bg-white/[0.02]" : "bg-black/[0.02]")
                               )}
                             >
                               <div className="flex items-center gap-2.5 sm:gap-4 min-w-0 z-10 relative flex-1 pr-2 sm:pr-4">
-                                <ASRRankBadge rank={i + 1} />
+                                <ASRRankBadge rank={rank} />
                                 <div className="flex flex-col text-left min-w-0">
                                   <span
                                     className={cn(
@@ -258,7 +269,7 @@ export const ASRWallOfFame = React.memo(
                                       theme === "dark"
                                         ? "text-zinc-100"
                                         : "text-zinc-900",
-                                      i === 0 ? "text-zinc-900 dark:text-white group-hover:text-blue-500" : "group-hover:text-blue-500"
+                                      isFirst ? "text-zinc-900 dark:text-white group-hover:text-blue-500" : "group-hover:text-blue-500"
                                     )}
                                   >
                                     {flags} {a.name}
@@ -276,7 +287,7 @@ export const ASRWallOfFame = React.memo(
                                   {displayVal}
                                 </span>
                               </div>
-                              {isTop3 && i === 0 && (
+                              {isFirst && (
                                 <>
                                   <div className="absolute top-0 right-0 w-32 h-32 bg-zinc-500/10 rotate-45 translate-x-16 -translate-y-16 pointer-events-none blur-xl" />
                                   <div className="absolute inset-0 bg-gradient-to-r from-zinc-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />

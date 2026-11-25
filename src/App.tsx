@@ -12,24 +12,69 @@ import { useLocation, useNavigate, useParams, Routes, Route, Navigate } from "re
 import {
   AlertCircle,
 } from "lucide-react";
-import {
-  ASRHeader,
-  ASRNavDock,
-  ASRLiveTicker,
-  ASRBaseModal,
-  ASRIntroOverlay,
-  ASROnboarding,
-  ASRFooter,
-} from "./components/ASRComponents";
-import { ASRVideoModal } from "./components/common/ASRVideoModal";
-import { ASRSubmitModal } from "./components/common/ASRSubmitModal";
+import { ASRHeader } from "./components/common/ASRHeader";
+import { ASRNavDock } from "./components/common/ASRNavDock";
+import { ASRLiveTicker } from "./components/common/ASRLiveTicker";
+import { ASRBaseModal } from "./components/common/ASRBaseModal";
+import { ASRFooter } from "./components/common/ASRFooter";
 
-const RankingsView = React.lazy(() => import("./components/views/RankingsView").then(m => ({ default: m.RankingsView })));
-const HomeView = React.lazy(() => import("./components/views/HomeView").then(m => ({ default: m.HomeView })));
-const MapSkillsView = React.lazy(() => import("./components/views/MapSkillsView").then(m => ({ default: m.MapSkillsView })));
-const ASRWallOfFame = React.lazy(() => import("./components/views/ASRWallOfFame").then(m => ({ default: m.ASRWallOfFame })));
-const ASRVideoAnnotator = React.lazy(() => import("./components/views/ASRVideoAnnotator").then(m => ({ default: m.ASRVideoAnnotator })));
-const InspectorBody = React.lazy(() => import("./components/inspector/InspectorBody").then(m => ({ default: m.InspectorBody })));
+const CHUNK_RELOAD_KEY = "asr_chunk_reload_ts";
+
+function isChunkLoadError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err || "");
+  return (
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("Importing a module script failed") ||
+    msg.includes("ChunkLoadError") ||
+    msg.includes("Loading chunk")
+  );
+}
+
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+  retries = 2,
+) {
+  return React.lazy(async () => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await importer();
+      } catch (err) {
+        lastError = err;
+        if (!isChunkLoadError(err)) throw err;
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+        }
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const lastReload = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || "0");
+        const now = Date.now();
+        if (!lastReload || now - lastReload > 15000) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+          window.location.reload();
+          return await new Promise<never>(() => {});
+        }
+      } catch {
+        // Ignore sessionStorage errors in restricted frames
+      }
+    }
+
+    throw lastError;
+  });
+}
+
+const ASROnboarding = lazyWithRetry(() => import("./components/common/ASROnboarding").then(m => ({ default: m.ASROnboarding })));
+const ASRVideoModal = lazyWithRetry(() => import("./components/common/ASRVideoModal").then(m => ({ default: m.ASRVideoModal })));
+const ASRSubmitModal = lazyWithRetry(() => import("./components/common/ASRSubmitModal").then(m => ({ default: m.ASRSubmitModal })));
+const RankingsView = lazyWithRetry(() => import("./components/views/RankingsView").then(m => ({ default: m.RankingsView })));
+const HomeView = lazyWithRetry(() => import("./components/views/HomeView").then(m => ({ default: m.HomeView })));
+const MapSkillsView = lazyWithRetry(() => import("./components/views/MapSkillsView").then(m => ({ default: m.MapSkillsView })));
+const ASRWallOfFame = lazyWithRetry(() => import("./components/views/ASRWallOfFame").then(m => ({ default: m.ASRWallOfFame })));
+const ASRVideoAnnotator = lazyWithRetry(() => import("./components/views/ASRVideoAnnotator").then(m => ({ default: m.ASRVideoAnnotator })));
+const InspectorBody = lazyWithRetry(() => import("./components/inspector/InspectorBody").then(m => ({ default: m.InspectorBody })));
 
 import { motion } from "motion/react";
 import { RouteScrollRestoration } from "./components/common/RouteScrollRestoration";
@@ -39,7 +84,6 @@ import { useDataStore } from "./store/useDataStore";
 import {
   CONFIG,
   cn,
-  trackEvent,
   trackPageview,
 } from "./lib/asr-utils";
 
@@ -101,11 +145,11 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
   const isLoading = useDataStore((s) => s.isLoading);
   const showOnboarding = useAppStore((s) => s.showOnboarding);
   const setShowOnboarding = useAppStore((s) => s.setShowOnboarding);
+  const playingVideoUrl = useAppStore((s) => s.playingVideoUrl);
+  const isSubmitModalOpen = useAppStore((s) => s.isSubmitModalOpen);
 
   const { eventType, setEventType } = useURLState();
   const { navigateToEntity, closeModals, goBackOne, canGoForward, goForwardOne } = useAppNavigation();
-
-  const [showIntro, setShowIntro] = useState(false);
 
   useEffect(() => {
     try {
@@ -159,11 +203,6 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
     navigate(`/${v}`);
   }, [navigate]);
 
-  const lastInspectorLayoutId = React.useRef<string | null>(null);
-  if (inspectorData?.data) {
-    lastInspectorLayoutId.current = `card-${inspectorData.data.id || inspectorData.data.name || 'empty'}`;
-  }
-
   return (
     <div
       className={cn(
@@ -194,19 +233,14 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
 
       <RouteScrollRestoration />
 
-      {showIntro && (
-        <ASRIntroOverlay
-          theme={theme}
-          onStart={() => {
-            setShowIntro(false);
-            trackEvent("initialize_app", { source: "intro_button" });
-          }}
-        />
+      {showOnboarding && (
+        <React.Suspense fallback={null}>
+          <ASROnboarding
+            isOpen={showOnboarding}
+            onClose={() => setShowOnboarding(false)}
+          />
+        </React.Suspense>
       )}
-      <ASROnboarding
-        isOpen={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
-      />
 
       <div 
         className={cn(
@@ -254,11 +288,11 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
         className={cn(
           "flex-1 w-full mx-auto flex flex-col relative",
           (view === "challenges" || view === "admin") ? "max-w-none pt-0" : "max-w-7xl pt-0 sm:pt-4",
-          view === "home" ? "pt-0 -mt-[140px] sm:-mt-[160px]" : ""
+          view === "home" ? "pt-0 -mt-[calc(140px+var(--pwa-top-clear))] sm:-mt-[calc(160px+var(--pwa-top-clear))]" : ""
         )}
       >
         <div className="flex-1 flex flex-col">
-            <RouteErrorBoundary>
+            <RouteErrorBoundary resetKey={backgroundLocation.pathname}>
             <React.Suspense fallback={
               <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]">
                 <div className="w-10 h-10 border-4 border-zinc-900 dark:border-zinc-100 border-t-transparent dark:border-t-transparent rounded-full animate-spin opacity-50" />
@@ -355,7 +389,6 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
 
       {/* Details Modal */}
       <ASRBaseModal
-        layoutId={lastInspectorLayoutId.current || undefined}
         isOpen={Boolean(inspectorData)}
         onClose={closeModals}
         onBack={goBackOne}
@@ -386,7 +419,13 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
           "Detail"
         }
       >
-        <RouteErrorBoundary>
+        <RouteErrorBoundary
+          resetKey={
+            inspectorData
+              ? `${inspectorData.type}-${inspectorData.data?.name || inspectorData.data?.pKey}`
+              : "closed"
+          }
+        >
             <React.Suspense fallback={
           <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]">
             <div className="w-10 h-10 border-4 border-zinc-900 dark:border-zinc-100 border-t-transparent dark:border-t-transparent rounded-full animate-spin opacity-50" />
@@ -411,8 +450,16 @@ function MainAppContent({ theme, setTheme }: { theme: "light" | "dark", setTheme
         </RouteErrorBoundary>
       </ASRBaseModal>
 
-      <ASRVideoModal />
-      <ASRSubmitModal />
+      {playingVideoUrl && (
+        <React.Suspense fallback={null}>
+          <ASRVideoModal />
+        </React.Suspense>
+      )}
+      {isSubmitModalOpen && (
+        <React.Suspense fallback={null}>
+          <ASRSubmitModal />
+        </React.Suspense>
+      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export const CONFIG = {
 export const THEME = {
   CARD: (t: string) =>
     t === "dark"
-      ? "bg-zinc-900/20 border-white/5 backdrop-blur-md shadow-sm text-zinc-100"
+      ? "bg-zinc-900/40 border-white/5 shadow-sm text-zinc-100"
       : "bg-white border-zinc-100 shadow-sm text-black",
   GLASS: (t: string) =>
     t === "dark"
@@ -47,10 +47,10 @@ export const THEME = {
   VALUE: "font-mono font-black tabular-nums tracking-tighter",
   BENTO_CARD: (t: string) =>
     cn(
-      "rounded-[1.5rem] border backdrop-blur-md transition-all duration-150",
+      "rounded-[1.5rem] border transition-colors duration-150",
       t === "dark"
-        ? "bg-zinc-900/50 border-white/10 shadow-sm hover:bg-white/5 hover:border-white/20"
-        : "bg-white/60 border-black/5 shadow-sm hover:bg-black/5 hover:border-black/10"
+        ? "bg-zinc-900/60 border-white/10 shadow-sm hover:bg-white/5 hover:border-white/20"
+        : "bg-white border-black/5 shadow-sm hover:bg-black/5 hover:border-black/10"
     ),
   INPUT: (t: string) =>
     t === "dark"
@@ -80,6 +80,11 @@ export const THEME = {
 };
 
 export const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
+
+export const normalizeForSearch = (str: string | null | undefined): string => {
+  if (!str) return "";
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
 
 const ALIAS_MAP: Record<string, string> = {
   "muhammadsteedbaloch": "muhammadbaloch",
@@ -791,6 +796,118 @@ export const getNormalizedNameList = (listStr: string) => {
     .split(/[,&/]| and /i)
     .map((n) => normalizeName(n))
     .filter(Boolean);
+};
+
+export interface RegionMatchable {
+  flag?: string;
+  country?: string;
+  countryName?: string;
+  location?: string;
+  region?: string;
+  state?: string;
+  stateProv?: string;
+  city?: string;
+  teamLocation?: string;
+  homeGym?: string;
+  teams?: Array<{ location?: string }>;
+}
+
+const stripRegionEmoji = (val: string) =>
+  String(val || "")
+    .toUpperCase()
+    .replace(/[\uD83C][\uDDE6-\uDDFF]|\p{Extended_Pictographic}/gu, "")
+    .trim();
+
+const normalizeLocationTokens = (raw: string): string[] => {
+  const tokens = stripRegionEmoji(raw)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (tokens.length > 0) {
+    const last = tokens[tokens.length - 1];
+    const normCountry = normalizeCountryName(last).toUpperCase().trim();
+    if (normCountry) tokens[tokens.length - 1] = normCountry;
+  }
+  return tokens;
+};
+
+export const matchesRegionTarget = (
+  region: { name: string; flag?: string; type?: string },
+  obj: RegionMatchable,
+): boolean => {
+  const locStr = formatLocation(obj);
+  if (!locStr || locStr === CONFIG.FALLBACKS.UNKNOWN_LOCATION) return false;
+
+  const targetTokens = normalizeLocationTokens(region.name);
+  const potentialCountry = targetTokens[targetTokens.length - 1] || "";
+  const computedFlagInfo = fixCountryEntity(potentialCountry, region.flag || "");
+  const finalFlag =
+    computedFlagInfo.flag && computedFlagInfo.flag !== "🏳️"
+      ? computedFlagInfo.flag
+      : getCombinedFlags(region.name);
+
+  // Only allow flag-only matching for country-level targets; city/state targets must match tokens.
+  const isCountryOnlyTarget =
+    region.type === "country" ||
+    targetTokens.length === 0 ||
+    (targetTokens.length === 1 && fixCountryEntity(targetTokens[0], "").flag !== "🏳️");
+
+  if (isCountryOnlyTarget) {
+    const regionFlags = getCombinedFlags(region.flag, finalFlag).split(" ").filter(Boolean);
+    if (regionFlags.length > 0) {
+      const objFlags = getCombinedFlags(
+        obj.flag,
+        obj.country,
+        obj.countryName,
+        obj.location,
+        obj.region,
+        obj.state,
+        locStr,
+      )
+        .split(" ")
+        .filter(Boolean);
+
+      for (const flag of regionFlags) {
+        if (flag !== "🏳️" && objFlags.includes(flag)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  const isTokenMatch = (objTokens: string[]): boolean => {
+    if (!objTokens || objTokens.length === 0 || targetTokens.length === 0) return false;
+    if (objTokens.length >= targetTokens.length) {
+      return targetTokens.every((t) => objTokens.includes(t));
+    }
+    return objTokens[0] === targetTokens[0] && objTokens.every((t) => targetTokens.includes(t));
+  };
+
+  const objTokens = normalizeLocationTokens(locStr);
+  if (isTokenMatch(objTokens)) {
+    return true;
+  }
+
+  const secondaryLocations = [
+    obj.location,
+    obj.teamLocation,
+    obj.homeGym,
+  ].filter(Boolean) as string[];
+
+  if (Array.isArray(obj.teams)) {
+    obj.teams.forEach((t) => {
+      if (t?.location) secondaryLocations.push(String(t.location));
+    });
+  }
+
+  for (const rv of secondaryLocations) {
+    const rvTokens = normalizeLocationTokens(rv);
+    if (isTokenMatch(rvTokens)) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 export const formatYYYYMMDD = (date: Date): string => {

@@ -5,8 +5,7 @@ import { useAppNavigation } from "../../hooks/useDerivedData";
 import { ASRSearchInput } from "./ASRSearchInput";
 import { MapPin, User, Users, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { cn } from "../../lib/asr-utils";
-import { normalizeForSearch } from "../../lib/utils";
+import { cn, normalizeForSearch } from "../../lib/asr-utils";
 import { ASREmptyState } from "./ASREmptyState";
 
 import { useDebounce } from "../../hooks/useDataHooks";

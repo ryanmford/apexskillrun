@@ -1,7 +1,7 @@
  
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { PlayerProfile, SkillData, SetterProfile, TeamProfile, ASRDataContext } from "../types";
-import { CONFIG, fixCountryEntity, getContinentData, isPlaceholderPlayer, normalizeName, isQualifiedAthlete } from "./asr-utils.ts";
+import { CONFIG, fixCountryEntity, getContinentData, isPlaceholderPlayer, normalizeName, isQualifiedAthlete, normalizeForSearch } from "./asr-utils.ts";
 import {
   processRankingData,
   processLiveFeedData,
@@ -9,7 +9,6 @@ import {
   processSettersData,
   parseSafeDate,
 } from "./asr-data.ts";
-import { normalizeForSearch } from "./utils";
 
 const sortAthletesWithTiebreakers = (a: PlayerProfile, b: PlayerProfile) => {
   if (Math.abs((b.rating || 0) - (a.rating || 0)) > 0.000001) {

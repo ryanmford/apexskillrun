@@ -16,7 +16,6 @@ interface ASRBaseModalProps {
   onBack?: () => void;
   onForward?: () => void;
   canForward?: boolean;
-  layoutId?: string;
 }
 
 import { motion, AnimatePresence } from "motion/react";
@@ -38,7 +37,6 @@ export const ASRBaseModal = React.memo(
     onBack,
     onForward,
     canForward,
-    layoutId,
   }: ASRBaseModalProps) => {
     const modalRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -146,19 +144,17 @@ export const ASRBaseModal = React.memo(
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-all"
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="absolute inset-0 bg-black/60 sm:backdrop-blur-sm"
               onClick={onClose}
             />
             <motion.div
               ref={modalRef}
-              layoutId={layoutId || "global-modal"}
-              initial={{ scale: 0.95, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{
-                type: "spring",
-                damping: 20,
-                stiffness: 500,
+                duration: 0.2,
+                ease: [0.22, 1, 0.36, 1],
               }}
               drag="x"
               dragDirectionLock
@@ -183,17 +179,17 @@ export const ASRBaseModal = React.memo(
               className={cn(
                 "relative flex-1 sm:flex-none flex flex-col w-full h-[100dvh] sm:aspect-[9/19.5] sm:h-auto sm:max-h-[90vh] sm:max-w-[400px] mx-auto sm:rounded-[32px] overflow-hidden shadow-2xl sm:ring-1",
                 theme === "dark"
-                  ? "bg-zinc-950/95 backdrop-blur-3xl sm:ring-white/10"
-                  : "bg-white/95 backdrop-blur-3xl sm:ring-zinc-200",
+                  ? "bg-[#030303] sm:bg-zinc-950/95 sm:backdrop-blur-3xl sm:ring-white/10"
+                  : "bg-white sm:bg-white/95 sm:backdrop-blur-3xl sm:ring-zinc-200",
               )}
             >
-              {/* Modal Header - Sticky & Glassy */}
+              {/* Modal Header - Sticky */}
               <div
                 className={cn(
-                  "sticky top-0 z-50 px-6 py-4 flex items-center justify-between border-b min-h-[60px] backdrop-blur-xl pt-[calc(1rem+env(safe-area-inset-top,0px))]",
+                  "sticky top-0 z-50 px-6 py-4 flex items-center justify-between border-b min-h-[60px] sm:backdrop-blur-xl pt-[calc(1rem+var(--safe-top))] sm:pt-4",
                   theme === "dark"
-                    ? "bg-zinc-950/80 border-white/10"
-                    : "bg-white/80 border-zinc-200",
+                    ? "bg-[#030303]/95 sm:bg-zinc-950/80 border-white/10"
+                    : "bg-white/95 sm:bg-white/80 border-zinc-200",
                 )}
               >
                 {/* Navigation Buttons (Undo/Redo Style) */}
@@ -327,7 +323,7 @@ export const ASRBaseModal = React.memo(
                 className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-none [-webkit-overflow-scrolling:touch] touch-pan-y flex flex-col relative pb-[env(safe-area-inset-bottom)]"
               >
                 <AnimatePresence
-                  mode="popLayout"
+                  mode="wait"
                   initial={false}
                   custom={historyIndex > prevIndexRef.current ? 1 : -1}
                 >
@@ -335,12 +331,12 @@ export const ASRBaseModal = React.memo(
                     key={historyIndex}
                     custom={historyIndex > prevIndexRef.current ? 1 : -1}
                     initial={(d: number) => ({
-                      x: d > 0 ? 50 : -50,
+                      x: d > 0 ? 32 : -32,
                       opacity: 0,
                     })}
                     animate={{ x: 0, opacity: 1 }}
-                    exit={(d: number) => ({ x: d > 0 ? -50 : 50, opacity: 0 })}
-                    transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                    exit={(d: number) => ({ x: d > 0 ? -32 : 32, opacity: 0 })}
+                    transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
                     className="flex-1 shrink-0 w-full flex flex-col h-fit"
                   >
                     <ModalScrollContext.Provider value={scrollContainerRef}>
