@@ -24,11 +24,13 @@ interface TickerEntry {
   playerName: string;
   skillFlag: string;
   skillName: string;
+  skillScore: number | null;
 }
 
 export const ASRLiveTicker = React.memo(
   ({ onEntityClick, theme }: ASRLiveTickerProps) => {
     const rawFeed = useDataStore((s) => s.recentFeed);
+    const cMet = useDataStore((s) => s.cMet);
     const viewportRef = useRef<HTMLDivElement>(null);
     const firstSetRef = useRef<HTMLDivElement>(null);
     const posRef = useRef(0);
@@ -58,6 +60,17 @@ export const ASRLiveTicker = React.memo(
         )
           .trim()
           .toUpperCase();
+        const rawPoints = Number(
+          item.challenge?.points ??
+            cMet?.[skillName]?.points ??
+            item.challenge?.difficulty ??
+            cMet?.[skillName]?.difficulty ??
+            0,
+        );
+        const skillScore =
+          Number.isFinite(rawPoints) && rawPoints > 0
+            ? Math.round(rawPoints)
+            : null;
 
         return {
           key: `${item.id}-${idx}`,
@@ -67,9 +80,10 @@ export const ASRLiveTicker = React.memo(
           playerName,
           skillFlag,
           skillName,
+          skillScore,
         };
       });
-    }, [rawFeed]);
+    }, [rawFeed, cMet]);
 
     useEffect(() => {
       if (entries.length === 0) return;
@@ -245,7 +259,10 @@ export const ASRLiveTicker = React.memo(
                 {entry.skillFlag}{" "}
               </span>
             )}
-            <span className="shrink-0 font-bold">{entry.skillName}</span>
+            <span className="shrink-0 font-bold tabular-nums">
+              {entry.skillName}
+              {entry.skillScore !== null ? ` (${entry.skillScore})` : ""}
+            </span>
           </button>
           <span className="shrink-0 inline-block animate-[bounce_1s_ease-in-out_infinite] ml-1">
             ✅
