@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { getPageMeta } from './src/meta-injector.ts';
+import { getMapboxStaticImageUrl } from './src/lib/mapbox.ts';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import crypto from 'crypto';
@@ -71,8 +72,11 @@ function toCodePoint(unicodeSurrogates: string) {
   return r.filter(cp => cp !== 'fe0f').join('-');
 }
 
-const MAX_TILE_CACHE_KEYS = 500;
-const tileCache = new Map<string, string>();
+const MAX_MAP_IMAGE_CACHE_KEYS = 500;
+const mapImageCache = new Map<string, string>();
+
+const MAX_EMOJI_CACHE_KEYS = 200;
+const emojiCache = new Map<string, string>();
 
 let cachedFontData: Buffer | null = null;
 async function getInterFontData(): Promise<Buffer> {
@@ -90,77 +94,52 @@ async function getInterFontData(): Promise<Buffer> {
   return cachedFontData;
 }
 
-async function fetchTile(url: string) {
-  if (tileCache.has(url)) {
-    const existing = tileCache.get(url)!;
-    tileCache.delete(url);
-    tileCache.set(url, existing);
+async function getMapboxStaticImage(coords: [number, number] | null): Promise<string | null> {
+  if (!coords || coords.length !== 2) return null;
+  const [lat, lon] = coords;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const zoom = 13;
+  const cacheKey = `${lat.toFixed(5)},${lon.toFixed(5)},${zoom}`;
+  if (mapImageCache.has(cacheKey)) {
+    const existing = mapImageCache.get(cacheKey)!;
+    mapImageCache.delete(cacheKey);
+    mapImageCache.set(cacheKey, existing);
     return existing;
   }
+
   try {
-    const res = await fetch(url);
+    const url = getMapboxStaticImageUrl(lat, lon, zoom, 1200, 630, true);
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return null;
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const dataUri = `data:image/png;base64,${buffer.toString("base64")}`;
-    if (tileCache.size >= MAX_TILE_CACHE_KEYS) {
-      const oldestKey = tileCache.keys().next().value;
+    if (mapImageCache.size >= MAX_MAP_IMAGE_CACHE_KEYS) {
+      const oldestKey = mapImageCache.keys().next().value;
       if (oldestKey !== undefined) {
-        tileCache.delete(oldestKey);
+        mapImageCache.delete(oldestKey);
       }
     }
-    tileCache.set(url, dataUri);
+    mapImageCache.set(cacheKey, dataUri);
     return dataUri;
   } catch {
     return null;
   }
 }
 
-async function getMapTiles(coords: [number, number] | null) {
-  if (!coords) return [];
-  const [lat, lon] = coords;
-  const Z = 13;
-  const centerTx = ((lon + 180) / 360) * Math.pow(2, Z);
-  const centerTy =
-    ((1 -
-      Math.log(
-        Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180),
-      ) /
-        Math.PI) /
-      2) *
-    Math.pow(2, Z);
+function getOgImageSvg(
+  title: string,
+  desc: string,
+  _type?: string,
+  stats?: { value: string; label: string }[],
+  mapImageDataUri?: string | null,
+) {
+  const hasStats = Boolean(stats && stats.length > 0);
+  const statCount = stats ? stats.length : 0;
+  const isSingleStat = statCount === 1;
+  const isGridStats = statCount > 2;
 
-  const TILE_SIZE = 256;
-  const svgX = centerTx * TILE_SIZE - 600;
-  const svgY = centerTy * TILE_SIZE - 315;
-
-  const startTx = Math.floor(svgX / TILE_SIZE);
-  const endTx = Math.floor((svgX + 1200) / TILE_SIZE);
-
-  const startTy = Math.floor(svgY / TILE_SIZE);
-  const endTy = Math.floor((svgY + 630) / TILE_SIZE);
-
-  const tiles: Array<{ url: string; x: number; y: number; dataUri?: string | null }> = [];
-  for (let tx = startTx; tx <= endTx; tx++) {
-    for (let ty = startTy; ty <= endTy; ty++) {
-      tiles.push({
-        url: `https://a.basemaps.cartocdn.com/dark_nolabels/${Z}/${tx}/${ty}.png`,
-        x: tx * TILE_SIZE - svgX,
-        y: ty * TILE_SIZE - svgY,
-      });
-    }
-  }
-
-  await Promise.all(
-    tiles.map(async (t) => {
-      t.dataUri = await fetchTile(t.url);
-    }),
-  );
-
-  return tiles.filter((t) => !!t.dataUri);
-}
-
-function getOgImageSvg(title: string, desc: string, type?: 'player' | 'skill', stats?: {value: string, label: string}[], mapTiles?: any[]) {
   return {
     type: 'div',
     props: {
@@ -173,63 +152,70 @@ function getOgImageSvg(title: string, desc: string, type?: 'player' | 'skill', s
         color: '#ffffff',
         fontFamily: 'Inter',
         padding: '60px 80px',
-        border: '12px solid #27272a',
         position: 'relative',
         overflow: 'hidden',
       },
       children: [
-        ...(mapTiles && mapTiles.length > 0 ? [
-          {
-            type: 'div',
-            props: {
-              style: {
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                opacity: 0.9,
-              },
-              children: mapTiles.map(t => ({
+        ...(mapImageDataUri
+          ? [
+              {
                 type: 'img',
                 props: {
-                  src: t.dataUri,
-                  width: 256,
-                  height: 256,
+                  src: mapImageDataUri,
+                  width: 1200,
+                  height: 630,
                   style: {
                     position: 'absolute',
-                    left: t.x,
-                    top: t.y,
-                    width: 256,
-                    height: 256,
-                  }
-                }
-              }))
-            }
-          },
-          {
-            type: 'div',
-            props: {
-              style: {
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                backgroundImage: 'linear-gradient(to right, rgba(9, 9, 11, 0.95) 0%, rgba(9, 9, 11, 0.7) 40%, rgba(9, 9, 11, 0.1) 100%)',
-              }
-            }
-          }
-        ] : []),
+                    top: 0,
+                    left: 0,
+                    width: 1200,
+                    height: 630,
+                    objectFit: 'cover',
+                    opacity: 0.55,
+                  },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: 1200,
+                    height: 630,
+                    backgroundImage:
+                      'linear-gradient(to right, rgba(9, 9, 11, 0.82) 0%, rgba(9, 9, 11, 0.45) 45%, rgba(9, 9, 11, 0.18) 100%)',
+                  },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    position: 'absolute',
+                    right: 22,
+                    bottom: 14,
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: 'rgba(255, 255, 255, 0.42)',
+                    letterSpacing: '0.01em',
+                  },
+                  children: '© Mapbox © OpenStreetMap',
+                },
+              },
+            ]
+          : []),
         {
           type: 'div',
           props: {
             style: {
+              position: 'relative',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
               height: '100%',
+              width: '100%',
             },
             children: [
               {
@@ -273,17 +259,23 @@ function getOgImageSvg(title: string, desc: string, type?: 'player' | 'skill', s
                         style: {
                           display: 'flex',
                           flexDirection: 'column',
-                          maxWidth: (stats && stats.length > 0) ? '650px' : '1050px',
+                          maxWidth: hasStats ? (isSingleStat ? '830px' : '660px') : '1040px',
                         },
                         children: [
                           {
                             type: 'div',
                             props: {
                               style: {
-                                fontSize: (stats && stats.length > 0) ? 72 : 96,
+                                fontSize: hasStats
+                                  ? title.length > 26
+                                    ? 58
+                                    : title.length > 20
+                                      ? 64
+                                      : 72
+                                  : 96,
                                 fontWeight: 700,
-                                marginBottom: '32px',
-                                lineHeight: 1.1,
+                                marginBottom: '22px',
+                                lineHeight: 1.08,
                                 color: '#ffffff',
                                 letterSpacing: '-0.04em',
                                 textTransform: 'uppercase',
@@ -303,78 +295,79 @@ function getOgImageSvg(title: string, desc: string, type?: 'player' | 'skill', s
                                   type: 'div',
                                   props: {
                                     style: {
-                                      fontSize: (stats && stats.length > 0) ? 32 : 40,
-                                      color: '#a1a1aa',
-                                      lineHeight: 1.2,
+                                      fontSize: hasStats ? 34 : 40,
+                                      color: '#f4f4f5',
+                                      lineHeight: 1.25,
                                       letterSpacing: '-0.02em',
                                       fontWeight: 700,
-                                      textTransform: 'uppercase',
                                     },
                                     children: desc,
                                   },
-                                }
-                              ]
-                            }
+                                },
+                              ],
+                            },
                           },
                         ],
                       },
                     },
-                    (stats && stats.length > 0) ? {
-                      type: 'div',
-                      props: {
-                        style: {
-                          display: 'flex',
-                          flexDirection: (stats.length > 2) ? 'row' : 'column',
-                          flexWrap: (stats.length > 2) ? 'wrap' : 'nowrap',
-                          alignItems: 'flex-end',
-                          justifyContent: 'flex-end',
-                          gap: (stats.length > 2) ? '0px' : '40px',
-                          width: (stats.length > 2) ? '400px' : 'auto',
-                        },
-                        children: stats.map((stat, i) => ({
-                           type: 'div',
-                           props: {
-                             style: {
-                               display: 'flex',
-                               flexDirection: 'column',
-                               alignItems: (stats.length > 2) ? 'flex-start' : 'flex-end',
-                               textAlign: (stats.length > 2) ? 'left' : 'right',
-                               width: (stats.length > 2) ? '50%' : 'auto',
-                               marginBottom: (stats.length > 2 && i < 2) ? '32px' : '0px',
-                             },
-                             children: [
-                               {
-                                 type: 'div',
-                                 props: {
-                                   style: {
-                                     fontSize: (stats.length > 2) ? 64 : 100,
-                                     fontWeight: 700,
-                                     color: '#ffffff',
-                                     lineHeight: 1,
-                                     letterSpacing: '-0.05em',
-                                   },
-                                   children: stat.value,
-                                 }
-                               },
-                               {
-                                 type: 'div',
-                                 props: {
-                                   style: {
-                                     fontSize: (stats.length > 2) ? 20 : 24,
-                                     fontWeight: 700,
-                                     color: '#a1a1aa',
-                                     textTransform: 'uppercase',
-                                     letterSpacing: '0.05em',
-                                     marginTop: (stats.length > 2) ? '8px' : '16px',
-                                   },
-                                   children: stat.label,
-                                 }
-                               }
-                             ]
-                           }
-                        }))
-                      }
-                    } : null
+                    hasStats && stats
+                      ? {
+                          type: 'div',
+                          props: {
+                            style: {
+                              display: 'flex',
+                              flexDirection: isGridStats ? 'row' : 'column',
+                              flexWrap: isGridStats ? 'wrap' : 'nowrap',
+                              alignItems: 'flex-end',
+                              justifyContent: 'flex-end',
+                              gap: isGridStats ? '0px' : '36px',
+                              width: isGridStats ? '400px' : 'auto',
+                            },
+                            children: stats.map((stat, i) => ({
+                              type: 'div',
+                              props: {
+                                style: {
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: isGridStats ? 'flex-start' : 'flex-end',
+                                  textAlign: isGridStats ? 'left' : 'right',
+                                  width: isGridStats ? '50%' : 'auto',
+                                  marginBottom: isGridStats && i < 2 ? '32px' : '0px',
+                                },
+                                children: [
+                                  {
+                                    type: 'div',
+                                    props: {
+                                      style: {
+                                        fontSize: isGridStats ? 64 : isSingleStat ? 128 : 100,
+                                        fontWeight: 700,
+                                        color: '#ffffff',
+                                        lineHeight: 0.95,
+                                        letterSpacing: '-0.05em',
+                                      },
+                                      children: stat.value,
+                                    },
+                                  },
+                                  {
+                                    type: 'div',
+                                    props: {
+                                      style: {
+                                        fontSize: isGridStats ? 20 : isSingleStat ? 26 : 24,
+                                        fontWeight: 700,
+                                        color: '#e4e4e7',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.06em',
+                                        marginTop: isGridStats ? '8px' : '14px',
+                                      },
+                                      children: stat.label,
+                                    },
+                                  },
+                                ],
+                              },
+                            })),
+                          },
+                        }
+                      : null,
                   ].filter(Boolean),
                 },
               },
@@ -439,27 +432,29 @@ async function startServer() {
   app.get('/api/og.png', async (req, res) => {
     try {
       let title = (req.query.title as string) || 'Apex Skill Run';
-      let desc = (req.query.desc as string) || 'Global Parkour Leaderboards and Skill Directory';
+      let desc = (req.query.desc as string) || 'Global Parkour Leaderboards and Challenge Directory';
       
       const reqPath = req.query.path as string;
       const reqQuery = req.query.query as string;
       
       let type: any;
-      let stats: {value: string, label: string}[] | undefined;
+      let stats: { value: string; label: string }[] | undefined;
       let mapCoords: [number, number] | null = null;
-      let mapTiles: any[] = [];
       
       if (reqPath) {
         const searchParams = new URLSearchParams(reqQuery || "");
         const meta = await getPageMeta(reqPath, searchParams, false);
-        title = meta.title?.toUpperCase();
-        desc = meta.description?.toUpperCase();
+        title = meta.title?.toUpperCase() || title;
+        desc = meta.description || desc;
         type = meta.ogType;
-        stats = meta.ogStats?.map(s => ({ value: s.value?.toUpperCase(), label: s.label?.toUpperCase() }));
+        stats = meta.ogStats?.map(s => ({
+          value: s.value?.toUpperCase(),
+          label: s.label?.toUpperCase(),
+        }));
         mapCoords = meta.ogMapCoords || null;
       }
 
-      const cacheDescKey = `${desc}||${JSON.stringify(stats || null)}||${JSON.stringify(mapCoords)}`;
+      const cacheDescKey = `v2||${desc}||${JSON.stringify(stats || null)}||${JSON.stringify(mapCoords)}`;
       const cachedBuffer = ogCache.get(title, cacheDescKey);
       if (cachedBuffer) {
         res.setHeader('Content-Type', 'image/png');
@@ -467,14 +462,13 @@ async function startServer() {
         return res.send(cachedBuffer);
       }
 
-      const [fontData, resolvedTiles] = await Promise.all([
+      const [fontData, mapImageDataUri] = await Promise.all([
         getInterFontData(),
-        mapCoords ? getMapTiles(mapCoords) : Promise.resolve([]),
+        mapCoords ? getMapboxStaticImage(mapCoords) : Promise.resolve(null),
       ]);
-      mapTiles = resolvedTiles;
 
       const svg = await satori(
-        getOgImageSvg(title, desc, type, stats, mapTiles),
+        getOgImageSvg(title, desc, type, stats, mapImageDataUri),
         {
           width: 1200,
           height: 630,
@@ -489,20 +483,31 @@ async function startServer() {
           loadAdditionalAsset: async (code, segment) => {
             if (code === 'emoji') {
               const cp = toCodePoint(segment);
+              if (emojiCache.has(cp)) {
+                return emojiCache.get(cp)!;
+              }
               const url = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${cp}.svg`;
               try {
-                const res = await fetch(url);
-                if (res.ok) {
-                  const text = await res.text();
-                  return `data:image/svg+xml;base64,${Buffer.from(text).toString('base64')}`;
+                const emojiRes = await fetch(url, { signal: AbortSignal.timeout(3000) });
+                if (emojiRes.ok) {
+                  const text = await emojiRes.text();
+                  const dataUri = `data:image/svg+xml;base64,${Buffer.from(text).toString('base64')}`;
+                  if (emojiCache.size >= MAX_EMOJI_CACHE_KEYS) {
+                    const oldestKey = emojiCache.keys().next().value;
+                    if (oldestKey !== undefined) {
+                      emojiCache.delete(oldestKey);
+                    }
+                  }
+                  emojiCache.set(cp, dataUri);
+                  return dataUri;
                 }
               } catch {
                 // ignore
               }
             }
             return '';
-          }
-        }
+          },
+        },
       );
 
       const resvg = new Resvg(svg, {
@@ -565,6 +570,7 @@ async function startServer() {
           .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${safeDesc}">`)
           .replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${currentUrl}">`)
           .replace(/<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${escapedOgImageUrl}">`)
+          .replace(/<meta (?:name|property)="twitter:url"[^>]*>/i, `<meta name="twitter:url" content="${currentUrl}">`)
           .replace(/<meta (?:name|property)="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${safeTitle}">`)
           .replace(/<meta (?:name|property)="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${safeDesc}">`)
           .replace(/<meta (?:name|property)="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${escapedOgImageUrl}">`);
@@ -612,6 +618,7 @@ async function startServer() {
           .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${safeDesc}">`)
           .replace(/<meta property="og:url"[^>]*>/i, `<meta property="og:url" content="${currentUrl}">`)
           .replace(/<meta property="og:image"[^>]*>/i, `<meta property="og:image" content="${escapedOgImageUrl}">`)
+          .replace(/<meta (?:name|property)="twitter:url"[^>]*>/i, `<meta name="twitter:url" content="${currentUrl}">`)
           .replace(/<meta (?:name|property)="twitter:title"[^>]*>/i, `<meta name="twitter:title" content="${safeTitle}">`)
           .replace(/<meta (?:name|property)="twitter:description"[^>]*>/i, `<meta name="twitter:description" content="${safeDesc}">`)
           .replace(/<meta (?:name|property)="twitter:image"[^>]*>/i, `<meta name="twitter:image" content="${escapedOgImageUrl}">`);

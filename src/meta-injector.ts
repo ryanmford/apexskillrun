@@ -2,12 +2,46 @@ import {
   normalizeName,
   CONFIG,
   getCombinedFlags,
-  toTitleCase,
   fixCountryEntity,
   formatLocation,
+  getSkillRating,
 } from "./lib/asr-utils.ts";
 import { computeAllState } from "./lib/asr-data-compute.ts";
 import type { ASRDataContext, PlayerProfile } from "./types.ts";
+
+const UPPERCASE_LOCATION_TOKENS = new Set(["USA", "UK", "UAE", "DC", "NYC", "CDMX"]);
+
+function titleCaseLocationPart(part: string): string {
+  return part
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      if (!word) return "";
+      const upper = word.toUpperCase();
+      if (UPPERCASE_LOCATION_TOKENS.has(upper)) return upper;
+      return word
+        .split("-")
+        .map((seg) =>
+          seg
+            ? seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase()
+            : "",
+        )
+        .join("-");
+    })
+    .join(" ");
+}
+
+function formatLocationTitleCase(locObj: any): string {
+  const formatted = formatLocation(locObj);
+  if (!formatted || formatted === CONFIG.FALLBACKS.UNKNOWN_LOCATION) {
+    return "Secret Location";
+  }
+  return formatted
+    .split(",")
+    .map((part) => titleCaseLocationPart(part))
+    .filter(Boolean)
+    .join(", ");
+}
 
 export interface MetaData {
   title: string;
@@ -287,46 +321,23 @@ export async function getPageMeta(
           {};
         const flags = getCombinedFlags(skillInfo).trim();
         const titlePrefix = flags ? `${flags} ` : "";
-        title = `${titlePrefix}${upperSkill} CHALLENGE SEND`;
+        const challengeTitle = upperSkill.endsWith("CHALLENGE")
+          ? upperSkill
+          : `${upperSkill} CHALLENGE`;
+        title = `${titlePrefix}${challengeTitle}`;
 
-        const isAllTime = eventType === "all-time";
-        const leaderboards = isAllTime
-          ? cachedData.lbAT
-          : eventType === "2026"
-            ? cachedData.lbSeason26
-            : cachedData.lbOpen;
+        const locStr = formatLocationTitleCase(skillInfo);
+        const levelNum = Math.round(getSkillRating(skillInfo));
 
-        let totalClears = 0;
-        if (leaderboards) {
-          const mData =
-            leaderboards.M?.[upperSkill] || leaderboards.M?.[skillStr] || {};
-          const fData =
-            leaderboards.F?.[upperSkill] || leaderboards.F?.[skillStr] || {};
-          totalClears = Object.keys(mData).length + Object.keys(fData).length;
-        }
-
-        const locStr =
-          skillInfo.city && skillInfo.city !== "UNKNOWN"
-            ? toTitleCase(skillInfo.city)
-            : skillInfo.country && skillInfo.country !== "UNKNOWN"
-              ? toTitleCase(skillInfo.country)
-              : "Secret Location";
-
-        const totalRunsCount = isAllTime
-          ? skillInfo.totalAllTimeRuns || skillInfo.totalRuns || totalClears
-          : totalClears;
-        const ptsFormatted = skillInfo.points
-          ? Number(skillInfo.points).toFixed(2)
-          : "--";
-        description = `SENDS: ${totalRunsCount} | 📍 ${locStr}`.toUpperCase();
+        description = `📍 ${locStr}`;
         ogType = "challenge";
         ogStats = [
-          { value: ptsFormatted, label: "POINTS" },
-          { value: String(totalRunsCount), label: "SENDS" },
+          { value: levelNum > 0 ? String(levelNum) : "--", label: "LEVEL" },
         ];
-        ogMapCoords = Array.isArray(skillInfo.parsedCoords)
-          ? skillInfo.parsedCoords
-          : null;
+        ogMapCoords =
+          Array.isArray(skillInfo.parsedCoords) && skillInfo.parsedCoords.length === 2
+            ? skillInfo.parsedCoords
+            : null;
       }
     } else if ((parts[0] === "gyms" || parts[0] === "teams") && parts[1]) {
       const slug = normalizeName(decodeURIComponent(parts[1]));

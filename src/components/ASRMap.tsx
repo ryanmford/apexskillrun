@@ -8,6 +8,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 import { trackEvent, cn, getSkillRating, getSkillTierConfig } from "../lib/asr-utils";
+import { getMapboxTileUrls } from "../lib/mapbox";
 import { ThemeContext } from "../theme-context";
 import { useAppStore } from "../store/useAppStore";
 import { SkillData } from "../types";
@@ -26,9 +27,6 @@ export interface ASRMapProps {
   isSidebarOpen?: boolean;
 }
 
-const CARTO_LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-const CARTO_DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const ESRI_SATELLITE_URL = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const MERCATOR_BOUNDS: L.LatLngBoundsExpression = [
   [-85.05112878, -179.9999],
   [85.05112878, 179.9999],
@@ -438,30 +436,7 @@ export const ASRMap = forwardRef(({
     userPane.style.zIndex = "650";
     userPane.style.pointerEvents = "none";
 
-    const mapboxToken =
-      (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string) ||
-      (import.meta.env.VITE_MAPBOX_TOKEN as string) ||
-      (typeof atob === "function"
-        ? atob("cGsuZXlKMUlqb2lZWEJsZUcxdmRtVnRaVzUwSWl3aVlTSTZJbU50ZEdJMmMycHBOakE0TTJzeWVIQjRiM041ZDJ4dU5XY2lmUS5hdFAzRW55VmVzSFJsSnlVZldGUU5n")
-        : "");
-
-    let lightTileUrl = CARTO_LIGHT_TILE_URL;
-    let darkTileUrl = CARTO_DARK_TILE_URL;
-    let satelliteUrl = ESRI_SATELLITE_URL;
-
-    if (mapboxToken) {
-      const lightStyle = import.meta.env.VITE_MAPBOX_LIGHT_STYLE || "mapbox/light-v11";
-      const darkStyle = import.meta.env.VITE_MAPBOX_DARK_STYLE || "mapbox/dark-v11";
-      lightTileUrl = `https://api.mapbox.com/styles/v1/${lightStyle}/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`;
-      darkTileUrl = `https://api.mapbox.com/styles/v1/${darkStyle}/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`;
-      satelliteUrl = `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`;
-    }
-
-    const isValidMercatorTileCoord = (coords?: { x: number; y: number; z: number }) => {
-      if (!coords || typeof coords.z !== "number") return true;
-      const limit = 1 << coords.z;
-      return coords.x >= 0 && coords.x < limit && coords.y >= 0 && coords.y < limit;
-    };
+    const { light: lightTileUrl, dark: darkTileUrl, satellite: satelliteUrl } = getMapboxTileUrls();
 
     const lightLayer = L.tileLayer(lightTileUrl, {
       maxZoom: 21,
@@ -483,28 +458,6 @@ export const ASRMap = forwardRef(({
       noWrap: true,
       bounds: MERCATOR_BOUNDS,
     });
-
-    // Automatic CARTO / Esri fallback if Mapbox tiles fail due to quota/network restrictions
-    if (mapboxToken) {
-      let lightFellBack = false;
-      let darkFellBack = false;
-      let satFellBack = false;
-      lightLayer.on("tileerror", (e: any) => {
-        if (lightFellBack || !isValidMercatorTileCoord(e?.coords)) return;
-        lightFellBack = true;
-        lightLayer.setUrl(CARTO_LIGHT_TILE_URL);
-      });
-      darkLayer.on("tileerror", (e: any) => {
-        if (darkFellBack || !isValidMercatorTileCoord(e?.coords)) return;
-        darkFellBack = true;
-        darkLayer.setUrl(CARTO_DARK_TILE_URL);
-      });
-      satelliteLayer.on("tileerror", (e: any) => {
-        if (satFellBack || !isValidMercatorTileCoord(e?.coords)) return;
-        satFellBack = true;
-        satelliteLayer.setUrl(ESRI_SATELLITE_URL);
-      });
-    }
 
     // Only attach the active theme/mode's tile layer so we never fetch 2x retina tiles simultaneously
     const initialLayerMode = useAppStore.getState().mapLayerMode;
